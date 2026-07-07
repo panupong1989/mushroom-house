@@ -8,6 +8,7 @@
 #include "safety.h"
 #include "control_fsm.h"
 #include "mqtt_client.h"
+#include "nvs_store.h"
 
 static Setpoints SP;
 static uint32_t t_last_ctrl=0, t_last_tele=0, t_last_hb=0;
@@ -36,6 +37,7 @@ void setup(){
   relays_begin();          // OFF ทั้งหมด (fail-safe)
   rs485_begin();
   onewire_bed_begin();
+  nvs_load_setpoints(SP);   // override ค่า default ถ้าเคยเซฟไว้จาก cmd/config
   control_begin(SP);
   control_set_mode(M_FRUITING);
   mqtt_begin();
@@ -52,7 +54,8 @@ void loop(){
     t_last_ctrl=now;
     SensorSnapshot s; read_sensors(s);
     char alert[24];
-    bool trip = safety_check(s, SP, alert, sizeof(alert));
+    // ใช้ setpoint ปัจจุบันจาก control_fsm (อาจถูกอัปเดตผ่าน cmd/config) ไม่ใช่ค่า SP ตอน boot
+    bool trip = safety_check(s, control_get_setpoints(), alert, sizeof(alert));
     if(trip){ control_set_mode(M_SAFE_HOLD); mqtt_publish_alert(alert,"critical",""); }
     else { if(control_mode()==M_SAFE_HOLD) control_set_mode(M_FRUITING); control_step(s); }
     mqtt_publish_state(relays_state());

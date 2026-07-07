@@ -1,8 +1,11 @@
 #include "mqtt_client.h"
 #include "config.h"
+#include "control_fsm.h"
+#include "nvs_store.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <string.h>
 
 static WiFiClient wifi;
 static PubSubClient mqtt(wifi);
@@ -10,8 +13,43 @@ static char base[48];
 
 static void topic(char*out,size_t n,const char*suffix){ snprintf(out,n,"%s/%s/%s",MQTT_BASE,HOUSE_ID,suffix); }
 
+static bool topic_is(const char *t, const char *suffix){
+  char full[64]; topic(full,sizeof(full),suffix);
+  return strcmp(t, full)==0;
+}
+
+// {actuator, action, ttl_sec} -> manual override มี TTL (หมดเวลากลับ AUTO)
+static void handle_cmd_actuator(byte *payload, unsigned int len){
+  StaticJsonDocument<192> d;
+  if (deserializeJson(d, payload, len)) return;
+  const char *actuator = d["actuator"] | "";
+  const char *action   = d["action"] | "";
+  uint32_t ttl_sec = d["ttl_sec"] | 300UL;
+  if (!*actuator || !*action) return;
+  control_manual_set(actuator, action, ttl_sec);
+}
+
+// {key:value,...} -> อัปเดต Setpoints + เก็บลง NVS
+static void handle_cmd_config(byte *payload, unsigned int len){
+  StaticJsonDocument<384> d;
+  if (deserializeJson(d, payload, len)) return;
+  for (JsonPair kv : d.as<JsonObject>()) control_set_setpoint(kv.key().c_str(), kv.value().as<float>());
+  nvs_save_setpoints(control_get_setpoints());
+}
+
+// {profile:"fruiting"|"spawn_run"} -> สลับ SPAWN_RUN/FRUITING
+static void handle_cmd_profile(byte *payload, unsigned int len){
+  StaticJsonDocument<96> d;
+  if (deserializeJson(d, payload, len)) return;
+  const char *profile = d["profile"] | "";
+  if      (!strcmp(profile,"fruiting"))  control_set_mode(M_FRUITING);
+  else if (!strcmp(profile,"spawn_run")) control_set_mode(M_SPAWN_RUN);
+}
+
 static void onMsg(char* t, byte* payload, unsigned int len){
-  // TODO(CC): parse cmd/actuator, cmd/config (setpoint -> NVS), cmd/profile
+  if      (topic_is(t,"cmd/actuator")) handle_cmd_actuator(payload,len);
+  else if (topic_is(t,"cmd/config"))   handle_cmd_config(payload,len);
+  else if (topic_is(t,"cmd/profile"))  handle_cmd_profile(payload,len);
 }
 
 static void reconnect(){
