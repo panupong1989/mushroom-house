@@ -7,12 +7,29 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: backend } }
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mush
+          POSTGRES_PASSWORD: mushpass
+          POSTGRES_DB: mushroom
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mush -d mushroom"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://mush:mushpass@localhost:5432/mushroom
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - run: npm install
-      - run: npx tsc --noEmit      # type-check (ยังไม่มี test -> เพิ่มทีหลัง)
+      - run: npm run migrate
+      - run: npx tsc --noEmit
+      - run: npm test
 
   firmware:
     runs-on: ubuntu-latest
@@ -22,4 +39,3 @@ jobs:
         with: { python-version: '3.12' }
       - run: pip install platformio
       - run: pio run -d firmware/esp32-controller
-        continue-on-error: true      # skeleton -> ยังไม่บังคับผ่าน (ปลดเมื่อ v1 เสร็จ)
