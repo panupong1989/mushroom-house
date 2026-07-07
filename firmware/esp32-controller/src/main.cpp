@@ -41,7 +41,13 @@ void setup(){
   control_begin(SP);
   control_set_mode(M_FRUITING);
   mqtt_begin();
-  esp_task_wdt_init(15, true);   // hardware watchdog 15s
+  // hardware watchdog 15s — arduino-esp32 3.x (IDF5) เปลี่ยน signature เป็นรับ config struct
+#if defined(ESP_ARDUINO_VERSION) && ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+  esp_task_wdt_config_t wdt_cfg = { .timeout_ms = 15000, .idle_core_mask = 0, .trigger_panic = true };
+  esp_task_wdt_init(&wdt_cfg);
+#else
+  esp_task_wdt_init(15, true);
+#endif
   esp_task_wdt_add(NULL);
 }
 
