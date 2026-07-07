@@ -3,10 +3,12 @@
 #include "config.h"
 #include "types.h"
 #include "rs485_sensors.h"
+#include "onewire_bed.h"
 #include "relays.h"
 #include "safety.h"
 #include "control_fsm.h"
 #include "mqtt_client.h"
+#include "nvs_store.h"
 
 static Setpoints SP;
 static uint32_t t_last_ctrl=0, t_last_tele=0, t_last_hb=0;
@@ -25,8 +27,7 @@ static void read_sensors(SensorSnapshot &s){
   s.air_temp_ctrl = okc? tmax : NAN;
   float rhsum=0;int rhc=0; for(int i=0;i<3;i++) if(s.air[i].ok){rhsum+=s.air[i].rh;rhc++;}
   s.air_rh_ctrl = rhc? rhsum/rhc : NAN;
-  // TODO(CC): DS18B20 x3 -> s.bed[], s.bed_temp_max
-  s.bed_temp_max = 0;
+  onewire_bed_read(s.bed, s.bed_temp_max);
   s.water_ok = read_float_water();
 }
 
@@ -35,6 +36,8 @@ void setup(){
   pinMode(FLOAT_PIN, INPUT);
   relays_begin();          // OFF ทั้งหมด (fail-safe)
   rs485_begin();
+  onewire_bed_begin();
+  nvs_load_setpoints(SP);   // override ค่า default ถ้าเคยเซฟไว้จาก cmd/config
   control_begin(SP);
   control_set_mode(M_FRUITING);
   mqtt_begin();
@@ -51,7 +54,8 @@ void loop(){
     t_last_ctrl=now;
     SensorSnapshot s; read_sensors(s);
     char alert[24];
-    bool trip = safety_check(s, SP, alert, sizeof(alert));
+    // ใช้ setpoint ปัจจุบันจาก control_fsm (อาจถูกอัปเดตผ่าน cmd/config) ไม่ใช่ค่า SP ตอน boot
+    bool trip = safety_check(s, control_get_setpoints(), alert, sizeof(alert));
     if(trip){ control_set_mode(M_SAFE_HOLD); mqtt_publish_alert(alert,"critical",""); }
     else { if(control_mode()==M_SAFE_HOLD) control_set_mode(M_FRUITING); control_step(s); }
     mqtt_publish_state(relays_state());
