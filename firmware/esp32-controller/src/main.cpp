@@ -3,6 +3,7 @@
 #include "config.h"
 #include "types.h"
 #include "rs485_sensors.h"
+#include "onewire_bed.h"
 #include "relays.h"
 #include "safety.h"
 #include "control_fsm.h"
@@ -25,8 +26,7 @@ static void read_sensors(SensorSnapshot &s){
   s.air_temp_ctrl = okc? tmax : NAN;
   float rhsum=0;int rhc=0; for(int i=0;i<3;i++) if(s.air[i].ok){rhsum+=s.air[i].rh;rhc++;}
   s.air_rh_ctrl = rhc? rhsum/rhc : NAN;
-  // TODO(CC): DS18B20 x3 -> s.bed[], s.bed_temp_max
-  s.bed_temp_max = 0;
+  onewire_bed_read(s.bed, s.bed_temp_max);
   s.water_ok = read_float_water();
 }
 
@@ -35,6 +35,7 @@ void setup(){
   pinMode(FLOAT_PIN, INPUT);
   relays_begin();          // OFF ทั้งหมด (fail-safe)
   rs485_begin();
+  onewire_bed_begin();
   control_begin(SP);
   control_set_mode(M_FRUITING);
   mqtt_begin();
