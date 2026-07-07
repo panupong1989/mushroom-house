@@ -1,6 +1,15 @@
 import { q } from '../db/pool.js';
 
-// telemetry: {ts, mode, water_ok, air_temp, air_rh, bed_max, air:[{addr,t,rh,ok}]}
+// firmware Mode enum (types.h): M_BOOT, M_SELFTEST, M_SPAWN_RUN, M_FRUITING, M_MANUAL, M_SAFE_HOLD
+const MODE_NAMES = ['BOOT', 'SELFTEST', 'SPAWN_RUN', 'FRUITING', 'MANUAL', 'SAFE_HOLD'];
+
+function normalizeMode(mode: unknown): string | null {
+  if (typeof mode === 'number') return MODE_NAMES[mode] ?? null;
+  if (typeof mode === 'string' && mode) return mode.toUpperCase();
+  return null;
+}
+
+// telemetry: {ts, mode, water_ok, air_temp, air_rh, bed_max, air:[{addr,t,rh,ok}], bed:[{addr,temp}]}
 export async function ingestTelemetry(houseId: string, d: any) {
   const rows: Array<[string, string, number]> = [];
   for (const a of d.air ?? []) {
@@ -15,7 +24,28 @@ export async function ingestTelemetry(houseId: string, d: any) {
       [houseId, addr, metric, value]
     );
   }
-  // TODO(CC): bed_temp readings, water_level, เก็บ mode ล่าสุดของ house
+
+  for (const b of d.bed ?? []) {
+    if (b.ok === false) continue;
+    await q(
+      `INSERT INTO sensor_readings (sensor_id, metric, value)
+       SELECT id, 'temp', $3 FROM sensors WHERE house_id=$1 AND kind='bed_temp' AND address=$2`,
+      [houseId, String(b.addr), b.temp]
+    );
+  }
+
+  if (typeof d.water_ok === 'boolean') {
+    await q(
+      `INSERT INTO sensor_readings (sensor_id, metric, value)
+       SELECT id, 'level', $2 FROM sensors WHERE house_id=$1 AND kind='water_level'`,
+      [houseId, d.water_ok ? 1 : 0]
+    );
+  }
+
+  const mode = normalizeMode(d.mode);
+  if (mode) {
+    await q(`UPDATE houses SET last_mode=$2, last_mode_ts=now() WHERE id=$1`, [houseId, mode]);
+  }
 }
 
 export async function ingestState(houseId: string, d: any) {
