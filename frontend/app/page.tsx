@@ -91,7 +91,7 @@ export default function Page() {
         </div>
       )}
 
-      <Card title="อุณหภูมิอากาศ">
+      <Card title="🌡️ อุณหภูมิอากาศ (เซนเซอร์ RS485)">
         <TempGauge
           value={telemetry.airTempCtrl}
           goldMin={setpoints.temp_fruit_min}
@@ -99,7 +99,8 @@ export default function Page() {
           coldLimit={setpoints.temp_heater_on}
           dangerHot={setpoints.temp_danger_hot}
         />
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <p className="mt-3 text-[11px] font-medium text-gray-400">อากาศ · แต่ละจุด</p>
+        <div className="mt-1 grid grid-cols-3 gap-2 text-center">
           {(['head', 'mid', 'tail'] as const).map((loc) => (
             <div key={loc} className="rounded-xl2 bg-bg p-2">
               <p className="text-[11px] text-gray-500">{LOCATION_LABELS[loc]}</p>
