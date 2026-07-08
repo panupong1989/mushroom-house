@@ -1,15 +1,20 @@
 import type { ActuatorKind, CommandAction, CommandResult, ConfigResponse, LatestResponse } from './types';
 import { buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
+import { SUPABASE_ENABLED } from './supabaseClient';
+import { fetchSupabaseConfig, sendSupabaseCommand } from './supabaseData';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 export const HOUSE_ID = process.env.NEXT_PUBLIC_HOUSE_ID ?? 'house-01';
 
-// NEXT_PUBLIC_USE_MOCK: 'true'/'false' บังคับโหมดตรงๆ, ถ้าไม่ตั้งเลย -> mock ถ้าไม่มี NEXT_PUBLIC_API_URL
-// (ให้ deploy frontend เดี่ยวๆ บน Vercel โดยยังไม่มี backend จริงก็เห็นข้อมูลวิ่งได้ทันที — ดู frontend/README.md)
+// ลำดับความสำคัญของแหล่งข้อมูล: Supabase (โหมด Internet, ดู supabase/README.md) > backend REST
+// (NEXT_PUBLIC_API_URL) > mock. NEXT_PUBLIC_USE_MOCK บังคับ mock ตรงๆ ได้เสมอไว้ดีบัก ไม่ว่าจะตั้ง
+// Supabase/API_URL ไว้หรือไม่ — ให้ deploy frontend เดี่ยวๆ บน Vercel โดยยังไม่มี backend/Supabase จริง
+// ก็เห็นข้อมูลวิ่งได้ทันที (ดู frontend/README.md)
 function resolveUseMock(): boolean {
   const raw = process.env.NEXT_PUBLIC_USE_MOCK;
   if (raw === 'true') return true;
   if (raw === 'false') return false;
+  if (SUPABASE_ENABLED) return false;
   return !process.env.NEXT_PUBLIC_API_URL;
 }
 export const USE_MOCK = resolveUseMock();
@@ -22,27 +27,32 @@ async function getJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+// หมายเหตุ: โหมด Supabase ไม่ใช้ fetchLatest นี้ — lib/hooks.ts useLatest เรียก
+// subscribeSupabaseLatest (realtime) ตรงๆ แทน เพราะ fetch ครั้งเดียวไม่พอสำหรับ realtime
 export function fetchLatest(houseId: string = HOUSE_ID): Promise<LatestResponse> {
   if (USE_MOCK) return Promise.resolve(buildMockLatest(Date.now()));
   return getJson<LatestResponse>(`/houses/${houseId}/latest`);
 }
 
 export function fetchConfig(houseId: string = HOUSE_ID, profile?: string): Promise<ConfigResponse> {
+  if (SUPABASE_ENABLED) return fetchSupabaseConfig(houseId, profile);
   if (USE_MOCK) return Promise.resolve(buildMockConfig());
   const qs = profile ? `?profile=${encodeURIComponent(profile)}` : '';
   return getJson<ConfigResponse>(`/houses/${houseId}/config${qs}`);
 }
 
-// POST /actuators/:kind/command — docs/05-api.md
+// POST /actuators/:kind/command — docs/05-api.md (โหมด backend REST)
 // หมายเหตุ: backend ปัจจุบัน (backend/src/routes/actuators.ts) ตอบ {ok:true} เสมอ ยังไม่เช็ค
 // กฎเหล็กด้านความปลอดภัยก่อนส่งคำสั่ง — ถ้ามีการเพิ่ม gate ฝั่ง backend (แยกคอมมิต) endpoint นี้
 // จะตอบ 409 {ok:false, reason, code} เมื่อถูกปฏิเสธ ซึ่งฟังก์ชันนี้รองรับไว้แล้ว
+// โหมด Supabase: insert ลงตาราง commands แทน (ดู lib/supabaseData.ts sendSupabaseCommand)
 export async function sendActuatorCommand(
   kind: string,
   action: CommandAction,
   ttlSec: number,
   houseId: string = HOUSE_ID
 ): Promise<CommandResult> {
+  if (SUPABASE_ENABLED) return sendSupabaseCommand(kind, action, ttlSec, houseId);
   if (USE_MOCK) return mockSendActuatorCommand(kind as ActuatorKind, action);
   try {
     const res = await fetch(`${API_URL}/actuators/${kind}/command?house=${encodeURIComponent(houseId)}`, {

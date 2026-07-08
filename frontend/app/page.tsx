@@ -87,7 +87,8 @@ export default function Page() {
 
       {error && (
         <div className="rounded-xl2 bg-danger/10 p-3 text-sm text-danger">
-          {error} — กำลังลองใหม่อัตโนมัติทุกไม่กี่วินาที (ตรวจสอบ NEXT_PUBLIC_API_URL)
+          {error} — กำลังลองใหม่อัตโนมัติทุกไม่กี่วินาที (ตรวจสอบ NEXT_PUBLIC_API_URL หรือ
+          NEXT_PUBLIC_SUPABASE_URL/ANON_KEY)
         </div>
       )}
 

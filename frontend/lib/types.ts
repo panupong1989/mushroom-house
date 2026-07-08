@@ -38,6 +38,7 @@ export type CommandAction = 'on' | 'off' | 'auto';
 
 export interface CommandOkResult {
   status: 'ok';
+  message?: string; // เช่น "ส่งคำสั่งแล้ว — รอ ESP32 รับคำสั่ง" (โหมด Supabase — ดู lib/supabaseData.ts)
 }
 export interface CommandRejectedResult {
   status: 'rejected';
