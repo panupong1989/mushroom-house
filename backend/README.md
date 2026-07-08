@@ -11,6 +11,12 @@ npm run migrate             # สร้างตาราง + seed
 npm run dev
 ```
 
+## CORS
+
+อ่านค่า origin ที่อนุญาตจาก env `CORS_ORIGIN` (ดู `.env.example`) — default `*` (dev only)
+ถ้า deploy frontend คนละโดเมนกับ backend (เช่นบน Vercel) ให้ตั้งเป็นโดเมนจริงของ frontend
+คั่นด้วย `,` ได้หลายค่า เช่น `CORS_ORIGIN=https://myapp.vercel.app`
+
 ## โครง src/
 - `index.ts`         bootstrap express + mqtt
 - `config.ts`        อ่าน env
