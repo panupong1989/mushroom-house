@@ -1,5 +1,7 @@
 import type { ActuatorKind, FsmMode } from './types';
 
+export { ACTUATOR_KINDS } from './types';
+
 // ค่าตั้งต้น fallback (ตรงกับ db/seed.sql + docs/03-control-logic.md)
 // ใช้เมื่อ GET /houses/:id/config ยังโหลดไม่เสร็จ/ล้มเหลว — ของจริงต้อง fetch มาเสมอเมื่อทำได้
 export const FALLBACK_SETPOINTS = {
