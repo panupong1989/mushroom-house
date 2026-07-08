@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* บังคับ light mode เสมอ — กัน UI พื้นฐานของเบราว์เซอร์ (scrollbar, form controls) เปลี่ยนเป็นมืดบนมือถือ */
+:root,
+html {
+  color-scheme: light only;
+}
+
+html,
+body {
+  background-color: #e7eee6;
+}
