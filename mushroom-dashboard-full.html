@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="light only">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>โรงเห็ดฟาง — แดชบอร์ด (ตัวอย่างเต็ม)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html{background:#E7EEE6}
+  :root{
+    color-scheme:light;
+    --bg:#E7EEE6; --card:#FFFFFF; --ink:#1E2B24; --mut:#7B8B81; --line:#E4EDE5;
+    --leaf:#2FA96A; --leaf-bright:#39C77E; --gold:#E3A73A; --cool:#3E9BD6;
+    --danger:#E4573B; --warn:#E39A2A; --mist:#16A6A2; --heat:#E8823D; --fan:#2FB0A0; --light:#E3B33A;
+    --shadow:0 12px 30px -10px rgba(25,60,40,.16), 0 3px 10px -3px rgba(25,60,40,.08);
+    --shadow-sm:0 6px 16px -6px rgba(25,60,40,.14), 0 2px 5px -2px rgba(25,60,40,.06);
+    --shadow-press:0 3px 8px -3px rgba(25,60,40,.20);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'IBM Plex Sans Thai',system-ui,sans-serif;background:var(--bg);color:var(--ink);
+    line-height:1.5;padding:22px 12px 60px;-webkit-font-smoothing:antialiased}
+  .page{max-width:430px;margin:0 auto}
+  .screenlabel{display:flex;align-items:center;gap:9px;margin:30px 6px 12px;font-weight:700}
+  .screenlabel .n{font-size:.78rem;color:#fff;background:var(--leaf);border-radius:7px;padding:2px 9px}
+  .screenlabel .d{font-size:.8rem;color:var(--mut);font-weight:500}
+  .phone{background:var(--bg);border-radius:30px;padding:14px 12px;box-shadow:inset 0 0 0 6px #fff, var(--shadow);position:relative}
+
+  .card{background:var(--card);border-radius:20px;box-shadow:var(--shadow);border:1px solid rgba(255,255,255,.7)}
+  header{display:flex;align-items:center;gap:11px;margin-bottom:15px;padding:2px 4px}
+  .logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,var(--leaf-bright),var(--leaf));
+    display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:var(--shadow-sm)}
+  .htitle{font-weight:700;font-size:1.1rem}
+  .hsub{font-size:.78rem;color:var(--mut);display:flex;align-items:center;gap:6px;margin-top:1px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--leaf-bright);box-shadow:0 0 0 4px rgba(57,199,126,.18)}
+  .dot.off{background:var(--danger);box-shadow:0 0 0 4px rgba(228,87,59,.18)}
+  .htime{margin-left:auto;font-size:.76rem;color:var(--mut);text-align:right}
+
+  /* hero gauge */
+  .hero{padding:16px 18px 18px;text-align:center;margin-bottom:12px}
+  .hero .cap{font-size:.88rem;color:var(--mut);font-weight:500}
+  .hero .cap b{color:var(--ink)}
+  .gaugewrap{position:relative;width:250px;height:150px;margin:2px auto 0}
+  .gval{position:absolute;left:0;right:0;top:74px;text-align:center}
+  .gval .n{font-size:3rem;font-weight:700;line-height:1;color:var(--leaf)}
+  .gval .u{font-size:1rem;color:var(--mut);font-weight:600}
+  .range{display:flex;justify-content:space-between;font-size:.7rem;color:var(--mut);width:210px;margin:0 auto}
+  .zonepill{display:inline-flex;align-items:center;gap:7px;margin-top:8px;background:rgba(47,169,106,.12);
+    color:var(--leaf);font-weight:600;font-size:.86rem;padding:6px 14px;border-radius:999px}
+  .zonepill .z{width:8px;height:8px;border-radius:50%;background:var(--leaf-bright)}
+  .three{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+  .three .c{background:#F6FAF6;border-radius:12px;padding:8px 4px}
+  .three .p{font-size:.7rem;color:var(--mut)}
+  .three .v{font-weight:700;font-size:1.05rem;margin-top:1px}
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .stat{padding:14px 15px}
+  .stat .lab{font-size:.82rem;color:var(--mut);font-weight:500;display:flex;align-items:center;gap:7px}
+  .stat .big{font-weight:700;font-size:2rem;line-height:1.1;margin-top:6px}
+  .stat .big small{font-size:.9rem;color:var(--mut);font-weight:600}
+  .ico{border-radius:9px;display:flex;align-items:center;justify-content:center}
+  .ico.s{width:25px;height:25px;font-size:13px}
+  .bar{height:7px;border-radius:99px;background:var(--line);margin-top:10px;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:99px}
+
+  .sec-t{font-size:.78rem;font-weight:700;color:var(--mut);letter-spacing:.02em;margin:2px 6px 9px;text-transform:uppercase}
+  .beds{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:11px}
+  .bed{padding:11px 8px;text-align:center}
+  .bed .p{font-size:.72rem;color:var(--mut)}
+  .bed .t{font-weight:700;font-size:1.35rem;margin-top:2px}
+  .bed .t small{font-size:.72rem;color:var(--mut)}
+  .minirow{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px}
+  .mini{padding:12px 14px;display:flex;align-items:center;gap:11px}
+  .mini .ico{width:36px;height:36px;font-size:17px}
+  .mini .t{font-weight:600;font-size:.92rem}
+  .mini .s{font-size:.76rem;color:var(--mut)}
+  .okpill{margin-left:auto;font-size:.74rem;font-weight:600;color:var(--leaf);background:rgba(47,169,106,.12);padding:5px 10px;border-radius:999px}
+
+  /* devices */
+  .dev{padding:4px 8px;margin-bottom:12px}
+  .drow{display:flex;align-items:center;gap:12px;padding:11px 10px}
+  .drow+.drow{border-top:1px solid var(--line)}
+  .drow .ico{width:38px;height:38px;font-size:17px}
+  .dname{font-weight:600;font-size:.96rem}
+  .dstate{font-size:.76rem;color:var(--mut);margin-top:1px}
+  .dstate.manual{color:var(--heat);font-weight:600}
+  .toggle{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .tag{font-size:.66rem;font-weight:700;padding:4px 9px;border-radius:999px}
+  .tag.auto{color:var(--mut);background:#F1F5F1}
+  .tag.man{color:var(--heat);background:rgba(232,130,61,.13)}
+  .sw{width:52px;height:30px;border-radius:999px;position:relative;box-shadow:var(--shadow-press)}
+  .sw>i{position:absolute;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.2)}
+  .sw.on{background:linear-gradient(135deg,var(--leaf-bright),var(--leaf))}
+  .sw.on>i{left:25px}
+  .sw.off{background:#DCE5DD}
+  .sw.off>i{left:3px}
+
+  .alertcard{padding:13px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px;background:linear-gradient(135deg,#F1FAF3,#FFF)}
+  .alertcard .ico{width:36px;height:36px;border-radius:11px;background:rgba(47,169,106,.14);font-size:17px}
+  .alertcard .t{font-weight:600;font-size:.94rem}
+  .alertcard .s{font-size:.78rem;color:var(--mut)}
+
+  /* ===== popup ===== */
+  .modalstage{position:relative;background:rgba(30,43,36,.35);border-radius:20px;padding:26px 16px;backdrop-filter:blur(1px)}
+  .modal{max-width:340px;margin:0 auto;padding:20px 20px 18px}
+  .modal .mi{width:52px;height:52px;border-radius:16px;background:rgba(232,130,61,.14);color:var(--heat);
+    display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 12px}
+  .modal h3{text-align:center;font-size:1.15rem;font-weight:700}
+  .modal p{text-align:center;font-size:.85rem;color:var(--mut);margin-top:5px}
+  .ttl{display:flex;gap:8px;margin:15px 0 6px}
+  .ttl .t{flex:1;text-align:center;padding:10px 0;border-radius:12px;font-weight:600;font-size:.9rem;
+    border:1.5px solid var(--line);color:var(--mut)}
+  .ttl .t.sel{border-color:var(--leaf);color:var(--leaf);background:rgba(47,169,106,.08)}
+  .warn{background:rgba(227,154,42,.12);color:#9a6a12;border-radius:12px;padding:10px 12px;font-size:.8rem;margin:12px 0}
+  .mbtns{display:flex;gap:10px;margin-top:6px}
+  .btn{flex:1;padding:13px 0;border-radius:14px;font-weight:700;font-size:.95rem;text-align:center;box-shadow:var(--shadow-sm)}
+  .btn.cancel{background:#F1F5F1;color:var(--mut)}
+  .btn.go{background:linear-gradient(135deg,var(--heat),#d9722d);color:#fff}
+
+  /* ===== settings ===== */
+  .seg{display:flex;background:#F1F5F1;border-radius:13px;padding:4px;margin-bottom:14px}
+  .seg .s{flex:1;text-align:center;padding:9px 0;border-radius:10px;font-weight:600;font-size:.9rem;color:var(--mut)}
+  .seg .s.sel{background:#fff;color:var(--leaf);box-shadow:var(--shadow-sm)}
+  .setrow{padding:14px 16px;margin-bottom:10px}
+  .setrow .top{display:flex;align-items:center;justify-content:space-between}
+  .setrow .k{font-weight:600;font-size:.95rem}
+  .setrow .hint{font-size:.75rem;color:var(--mut);margin-top:2px}
+  .stepper{display:flex;align-items:center;gap:12px}
+  .stepper .b{width:34px;height:34px;border-radius:11px;background:#F1F5F1;display:flex;align-items:center;justify-content:center;
+    font-size:1.2rem;font-weight:700;color:var(--leaf);box-shadow:var(--shadow-press)}
+  .stepper .val{font-weight:700;font-size:1.15rem;min-width:66px;text-align:center}
+  .stepper .val small{font-size:.8rem;color:var(--mut);font-weight:600}
+  .savebar{position:sticky;bottom:0;padding-top:6px}
+  .savebtn{padding:15px 0;border-radius:16px;text-align:center;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,var(--leaf-bright),var(--leaf));box-shadow:var(--shadow)}
+
+
+  /* mode switch (AUTO/MANUAL) */
+  .modeswitch{display:flex;background:#F1F5F1;border-radius:14px;padding:4px;margin:0 0 4px}
+  .modeswitch .m{flex:1;text-align:center;padding:11px 0;border-radius:11px;font-weight:700;font-size:.95rem;color:var(--mut)}
+  .modeswitch .m.sel-auto{background:#fff;color:var(--leaf);box-shadow:var(--shadow-sm)}
+  .modeswitch .m.sel-man{background:linear-gradient(135deg,var(--heat),#d9722d);color:#fff;box-shadow:var(--shadow-sm)}
+  .modenote{font-size:.76rem;color:var(--mut);margin:8px 8px 2px;display:flex;align-items:center;gap:6px}
+  /* on/off pill buttons per device */
+  .oo{margin-left:auto;display:flex;gap:6px}
+  .oo .b{padding:8px 15px;border-radius:11px;font-weight:700;font-size:.82rem;box-shadow:var(--shadow-press)}
+  .oo .b.on{background:linear-gradient(135deg,var(--leaf-bright),var(--leaf));color:#fff}
+  .oo .b.off{background:#EDF1ED;color:var(--mut)}
+  .oo .b.ghost{background:#F4F7F4;color:#C3CEC5}
+  .dev.locked .drow{opacity:.55}
+  .lockbadge{margin-left:auto;font-size:.72rem;font-weight:700;color:var(--mut);background:#F1F5F1;padding:6px 12px;border-radius:999px;display:inline-flex;align-items:center;gap:5px}
+
+  /* alerts list */
+  .arow{padding:13px 15px;display:flex;align-items:center;gap:12px;margin-bottom:9px}
+  .arow .ico{width:38px;height:38px;border-radius:12px;font-size:17px;flex:0 0 auto}
+  .arow .t{font-weight:600;font-size:.94rem}
+  .arow .s{font-size:.77rem;color:var(--mut);margin-top:1px}
+  .sev{margin-left:auto;font-size:.68rem;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .sev.crit{color:var(--danger);background:rgba(228,87,59,.12)}
+  .sev.warn{color:var(--warn);background:rgba(227,154,42,.13)}
+  .sev.ok{color:var(--leaf);background:rgba(47,169,106,.12)}
+  .linecard{padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .linecard .ico{width:38px;height:38px;border-radius:11px;background:#EAF7EC;font-size:18px}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div style="text-align:center;color:var(--mut);font-size:.82rem;margin-bottom:4px">
+    ตัวอย่างเต็ม 4 หน้าจอ · เลื่อนลงดูทีละหน้า · ข้อมูลจำลอง กดไม่ได้จริง
+  </div>
+
+  <!-- ============ SCREEN 1: MONITOR ============ -->
+  <div class="screenlabel"><span class="n">หน้า 1</span> Monitor <span class="d">— ดูค่าสด + สั่ง manual</span></div>
+  <div class="phone">
+    <header>
+      <div class="logo">🍄</div>
+      <div>
+        <div class="htitle">โรงเห็ดฟาง 01</div>
+        <div class="hsub"><span class="dot"></span> ออนไลน์ · โหมด ออกดอก</div>
+      </div>
+      <div class="htime">อัปเดต<br>14:32 น.</div>
+    </header>
+
+    <div class="card hero">
+      <div class="cap">อุณหภูมิอากาศ · <b>ค่าที่ใช้คุม (สูงสุด)</b></div>
+      <div class="gaugewrap">
+        <svg viewBox="0 0 250 150" width="250" height="150">
+          <path d="M25 132 A100 100 0 0 1 225 132" fill="none" stroke="#EAF1EA" stroke-width="16" stroke-linecap="round"/>
+          <path d="M94 42 A100 100 0 0 1 156 42" fill="none" stroke="#F4E3BE" stroke-width="16" stroke-linecap="round"/>
+          <path d="M25 132 A100 100 0 0 1 225 132" fill="none" stroke="url(#g)" stroke-width="16" stroke-linecap="round" stroke-dasharray="160 314"/>
+          <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7FD3A6"/><stop offset="1" stop-color="#2FA96A"/></linearGradient></defs>
+          <line x1="125" y1="132" x2="128" y2="48" stroke="#1E2B24" stroke-width="3.2" stroke-linecap="round"/>
+          <circle cx="125" cy="132" r="6" fill="#1E2B24"/>
+        </svg>
+        <div class="gval"><span class="n">34.0</span><span class="u">°C</span></div>
+      </div>
+      <div class="range"><span>20°</span><span style="color:var(--gold);font-weight:600">โซนทอง 28–32°</span><span>40°</span></div>
+      <div class="zonepill" style="background:rgba(227,154,42,.13);color:#b07a17"><span class="z" style="background:var(--warn)"></span> เกินโซนนิดหน่อย · พัดลมกำลังระบาย</div>
+      <div class="three">
+        <div class="c"><div class="p">หัวโรง</div><div class="v">33.2°</div></div>
+        <div class="c"><div class="p">กลางโรง</div><div class="v" style="color:var(--warn)">34.0°</div></div>
+        <div class="c"><div class="p">ท้ายโรง</div><div class="v">31.8°</div></div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="card stat">
+        <div class="lab"><span class="ico s" style="background:rgba(22,166,162,.13);color:var(--mist)">💧</span> ความชื้น</div>
+        <div class="big">87<small>%</small></div>
+        <div class="bar"><i style="width:87%;background:linear-gradient(90deg,#6FD8D4,var(--mist))"></i></div>
+      </div>
+      <div class="card stat">
+        <div class="lab"><span class="ico s" style="background:rgba(62,155,214,.13);color:var(--cool)">🌫️</span> CO₂</div>
+        <div class="big">720<small>ppm</small></div>
+        <div class="bar"><i style="width:40%;background:linear-gradient(90deg,#8Fc4ef,var(--cool))"></i></div>
+      </div>
+    </div>
+
+    <div class="sec-t">อุณหภูมิในกอง (ทะลายปาล์ม)</div>
+    <div class="beds">
+      <div class="card bed"><div class="p">หัวโรง</div><div class="t">33.1<small>°</small></div></div>
+      <div class="card bed"><div class="p">กลางโรง</div><div class="t">34.0<small>°</small></div></div>
+      <div class="card bed"><div class="p">ท้ายโรง</div><div class="t">32.4<small>°</small></div></div>
+    </div>
+    <div class="minirow">
+      <div class="card mini"><span class="ico" style="background:rgba(62,155,214,.13);color:var(--cool)">🪣</span><div><div class="t">ระดับน้ำ</div><div class="s">เพียงพอ</div></div></div>
+      <div class="card mini"><span class="ico" style="background:rgba(47,169,106,.13);color:var(--leaf)">📶</span><div><div class="t">เชื่อมต่อ</div><div class="s">ล่าสุด 8 วิ ที่แล้ว</div></div></div>
+    </div>
+
+    <div class="sec-t">อุปกรณ์</div>
+    <div class="modeswitch">
+      <div class="m sel-auto">AUTO · ระบบคุมเอง</div>
+      <div class="m">MANUAL · เทสเอง</div>
+    </div>
+    <div class="modenote">🔒 ตอนนี้โหมด AUTO — ปุ่มเปิด/ปิดถูกล็อก ระบบคุมตามอุณหภูมิ/ความชื้นให้อัตโนมัติ</div>
+    <div class="card dev locked" style="margin-top:8px">
+      <div class="drow">
+        <span class="ico" style="background:rgba(22,166,162,.13);color:var(--mist)">💧</span>
+        <div><div class="dname">เครื่องพ่นหมอก</div><div class="dstate">ปิดอยู่ · ความชื้นพอแล้ว</div></div>
+        <span class="lockbadge">🔒 ล็อก</span>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(232,130,61,.14);color:var(--heat)">🔥</span>
+        <div><div class="dname">ฮีทเตอร์</div><div class="dstate">ปิดอยู่ · อุณหภูมิพอดี</div></div>
+        <span class="lockbadge">🔒 ล็อก</span>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(47,176,160,.14);color:var(--fan)">🌀</span>
+        <div><div class="dname">พัดลมดูดอากาศ</div><div class="dstate">เปิดอยู่ · กำลังลดความร้อน</div></div>
+        <span class="lockbadge">🔒 ล็อก</span>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(47,176,160,.14);color:var(--fan)">🔄</span>
+        <div><div class="dname">พัดลมหมุนเวียน</div><div class="dstate">เปิดอยู่ · เกลี่ยทุกชั้น</div></div>
+        <span class="lockbadge">🔒 ล็อก</span>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(227,179,58,.16);color:var(--light)">💡</span>
+        <div><div class="dname">หลอดไฟ</div><div class="dstate">เปิดอยู่ · ช่วงกลางวัน</div></div>
+        <span class="lockbadge">🔒 ล็อก</span>
+      </div>
+    </div>
+
+    <div class="card alertcard">
+      <div class="ico">🌿</div>
+      <div><div class="t">ไม่มีการแจ้งเตือน</div><div class="s">ระบบทำงานปกติ · ดูประวัติในหน้าแจ้งเตือน</div></div>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 2: MANUAL MODE ============ -->
+  <div class="screenlabel"><span class="n">โหมด MANUAL</span> เทสอุปกรณ์หน้างาน <span class="d">— ปุ่มเปิด/ปิดกดได้</span></div>
+  <div class="phone">
+    <div class="sec-t">อุปกรณ์</div>
+    <div class="modeswitch">
+      <div class="m">AUTO · ระบบคุมเอง</div>
+      <div class="m sel-man">MANUAL · เทสเอง</div>
+    </div>
+    <div class="modenote" style="color:var(--heat)">🔧 โหมด MANUAL — กดเปิด/ปิดแต่ละตัวได้เลย (เปิด = เปิดค้าง) · ระบบไม่คุมอัตโนมัติชั่วคราว</div>
+    <div class="card dev" style="margin-top:8px">
+      <div class="drow">
+        <span class="ico" style="background:rgba(22,166,162,.13);color:var(--mist)">💧</span>
+        <div><div class="dname">เครื่องพ่นหมอก</div><div class="dstate manual">เปิดค้าง · กำลังพ่น</div></div>
+        <div class="oo"><div class="b on">เปิด</div><div class="b off">ปิด</div></div>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(232,130,61,.14);color:var(--heat)">🔥</span>
+        <div><div class="dname">ฮีทเตอร์</div><div class="dstate">ปิดอยู่</div></div>
+        <div class="oo"><div class="b off">เปิด</div><div class="b on">ปิด</div></div>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(47,176,160,.14);color:var(--fan)">🌀</span>
+        <div><div class="dname">พัดลมดูดอากาศ</div><div class="dstate manual">เปิดค้าง</div></div>
+        <div class="oo"><div class="b on">เปิด</div><div class="b off">ปิด</div></div>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(47,176,160,.14);color:var(--fan)">🔄</span>
+        <div><div class="dname">พัดลมหมุนเวียน</div><div class="dstate">ปิดอยู่</div></div>
+        <div class="oo"><div class="b off">เปิด</div><div class="b on">ปิด</div></div>
+      </div>
+      <div class="drow">
+        <span class="ico" style="background:rgba(227,179,58,.16);color:var(--light)">💡</span>
+        <div><div class="dname">หลอดไฟ</div><div class="dstate">ปิดอยู่</div></div>
+        <div class="oo"><div class="b off">เปิด</div><div class="b on">ปิด</div></div>
+      </div>
+    </div>
+
+    <div class="warn" style="border-radius:16px;margin:0 2px 10px">🛡️ ถึงจะ MANUAL กฎเหล็กความปลอดภัยยังทำงานเสมอ — น้ำต่ำ / กองร้อน&gt;40° / หนาว&lt;27.5° ระบบจะไม่ยอมเปิดให้ แม้กดปุ่ม</div>
+
+    <div class="card arow" style="background:rgba(228,87,59,.06)">
+      <div class="ico" style="background:rgba(228,87,59,.13)">🚫</div>
+      <div><div class="t">กดเปิดหมอกไม่สำเร็จ</div><div class="s">อุณหภูมิ 26° ต่ำเกิน — ถูกกฎเหล็กปฏิเสธ (กันเห็ดหนาว)</div></div>
+      <span class="sev crit">ถูกตัด</span>
+    </div>
+  </div>
+
+  <!-- ============ SCREEN 3: SETTINGS ============ -->
+  <div class="screenlabel"><span class="n">หน้า 2</span> ตั้งค่า <span class="d">— setpoint / รอบเวลา / โหมด</span></div>
+  <div class="phone">
+    <header>
+      <div class="logo" style="background:linear-gradient(135deg,#8FB8F0,#5B8DE0);font-size:19px">⚙️</div>
+      <div><div class="htitle">ตั้งค่าการควบคุม</div><div class="hsub">โรงเห็ดฟาง 01</div></div>
+    </header>
+
+    <div class="sec-t">โหมดการเพาะ</div>
+    <div class="seg"><div class="s">เดินเส้นใย</div><div class="s sel">ออกดอก</div></div>
+
+    <div class="sec-t">อุณหภูมิ (โซนทอง)</div>
+    <div class="card setrow">
+      <div class="top"><div><div class="k">โซนทอง — ต่ำสุด</div><div class="hint">แนะนำ 28° · ต่ำกว่านี้เปิดฮีทเตอร์</div></div>
+        <div class="stepper"><div class="b">−</div><div class="val">28<small>°C</small></div><div class="b">+</div></div></div>
+    </div>
+    <div class="card setrow">
+      <div class="top"><div><div class="k">โซนทอง — สูงสุด</div><div class="hint">แนะนำ 32° · เกินนี้เปิดพัดลมดูด</div></div>
+        <div class="stepper"><div class="b">−</div><div class="val">32<small>°C</small></div><div class="b">+</div></div></div>
+    </div>
+
+    <div class="sec-t">ความชื้น</div>
+    <div class="card setrow">
+      <div class="top"><div><div class="k">ความชื้นเป้าหมาย</div><div class="hint">แนะนำ 85–90%</div></div>
+        <div class="stepper"><div class="b">−</div><div class="val">87<small>%</small></div><div class="b">+</div></div></div>
+    </div>
+
+    <div class="sec-t">รอบเวลา</div>
+    <div class="card setrow">
+      <div class="top"><div><div class="k">พัดลมระบายอากาศ</div><div class="hint">ไล่ CO₂ ทุก 2 ชม. นาน 10 นาที</div></div>
+        <span class="tag auto" style="font-size:.8rem;padding:7px 12px">ทุก 2 ชม.</span></div>
+    </div>
+    <div class="card setrow">
+      <div class="top"><div><div class="k">หลอดไฟ</div><div class="hint">เปิดกลางวันกระตุ้นการออกดอก</div></div>
+        <span class="tag auto" style="font-size:.8rem;padding:7px 12px">06:00–18:00</span></div>
+    </div>
+
+    <div class="warn" style="border-radius:16px;margin:2px 2px 14px">🛡️ ค่าเหล่านี้กระทบการปลูกโดยตรง · ระบบจะเตือนถ้าตั้งนอกช่วงปลอดภัย และกฎเหล็ก (หนาว&lt;27.5° ห้ามพ่นหมอก) จะทำงานเสมอ</div>
+
+    <div class="savebar"><div class="savebtn">บันทึกการตั้งค่า</div></div>
+  </div>
+
+  <!-- ============ SCREEN 4: ALERTS ============ -->
+  <div class="screenlabel"><span class="n">หน้า 3</span> แจ้งเตือน <span class="d">— + ส่งเข้า LINE</span></div>
+  <div class="phone">
+    <header>
+      <div class="logo" style="background:linear-gradient(135deg,#F2A65A,#E4573B);font-size:19px">🔔</div>
+      <div><div class="htitle">แจ้งเตือน</div><div class="hsub">2 รายการที่ต้องดู</div></div>
+    </header>
+
+    <div class="card linecard">
+      <div class="ico">📲</div>
+      <div><div class="t" style="font-weight:600">ส่งแจ้งเตือนเข้า LINE</div><div class="s">เตือนทันทีเมื่อมีปัญหา แม้ไม่ได้เปิดแอป</div></div>
+      <div class="sw on" style="margin-left:auto"><i></i></div>
+    </div>
+
+    <div class="card arow">
+      <div class="ico" style="background:rgba(228,87,59,.13)">💧</div>
+      <div><div class="t">น้ำในถังต่ำ</div><div class="s">2 นาทีที่แล้ว · ปั๊มถูกตัดชั่วคราว</div></div>
+      <span class="sev crit">ด่วน</span>
+    </div>
+    <div class="card arow">
+      <div class="ico" style="background:rgba(227,154,42,.14)">🌡️</div>
+      <div><div class="t">อุณหภูมิเกินโซน</div><div class="s">15 นาทีที่แล้ว · 34° กำลังระบาย</div></div>
+      <span class="sev warn">เฝ้าดู</span>
+    </div>
+    <div class="card arow" style="opacity:.6">
+      <div class="ico" style="background:rgba(47,169,106,.12)">✓</div>
+      <div><div class="t">กองร้อนเกิน 40° (แก้แล้ว)</div><div class="s">เมื่อวาน 22:10 · คลี่คลายอัตโนมัติ</div></div>
+      <span class="sev ok">แก้แล้ว</span>
+    </div>
+    <div class="card arow" style="opacity:.6">
+      <div class="ico" style="background:rgba(47,169,106,.12)">✓</div>
+      <div><div class="t">ESP32 ออฟไลน์ (แก้แล้ว)</div><div class="s">เมื่อวาน 19:03 · กลับมาออนไลน์</div></div>
+      <span class="sev ok">แก้แล้ว</span>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:#9AA99F;font-size:.75rem;margin-top:26px">
+    ตัวอย่างดีไซน์เต็ม · ยังไม่เชื่อมข้อมูลจริง
+  </div>
+
+</div>
+</body>
+</html>
