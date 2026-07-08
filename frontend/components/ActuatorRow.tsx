@@ -5,7 +5,12 @@ import { sendActuatorCommand } from '@/lib/api';
 import { MANUAL_TTL_SEC } from '@/lib/constants';
 import type { ActuatorKind, CommandAction } from '@/lib/types';
 
-type RowStatus = { kind: 'idle' } | { kind: 'sending'; action: CommandAction } | { kind: 'success' } | { kind: 'error'; message: string } | { kind: 'rejected'; reason: string };
+type RowStatus =
+  | { kind: 'idle' }
+  | { kind: 'sending'; action: CommandAction }
+  | { kind: 'success'; message?: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'rejected'; reason: string };
 
 interface ActuatorRowProps {
   kind: ActuatorKind;
@@ -27,7 +32,7 @@ export function ActuatorRow({ kind, label, isOn, locked, predictedBlock, houseId
     const ttl = action === 'on' ? MANUAL_TTL_SEC : 60;
     const result = await sendActuatorCommand(kind, action, ttl, houseId);
     if (result.status === 'ok') {
-      setStatus({ kind: 'success' });
+      setStatus({ kind: 'success', message: result.message });
     } else if (result.status === 'rejected') {
       setStatus({ kind: 'rejected', reason: result.reason });
     } else {
@@ -71,7 +76,7 @@ export function ActuatorRow({ kind, label, isOn, locked, predictedBlock, houseId
         <p className="text-xs text-gold">⚠ {predictedBlock}</p>
       )}
       {status.kind === 'sending' && <p className="text-xs text-gray-500">กำลังส่งคำสั่ง…</p>}
-      {status.kind === 'success' && <p className="text-xs text-leaf-dark">สำเร็จ</p>}
+      {status.kind === 'success' && <p className="text-xs text-leaf-dark">{status.message ?? 'สำเร็จ'}</p>}
       {status.kind === 'rejected' && <p className="text-xs font-semibold text-danger">ถูกปฏิเสธ: {status.reason}</p>}
       {status.kind === 'error' && <p className="text-xs font-semibold text-danger">ล้มเหลว: {status.message}</p>}
     </div>

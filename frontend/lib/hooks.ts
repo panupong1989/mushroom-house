@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { fetchConfig, fetchLatest } from './api';
+import { SUPABASE_ENABLED } from './supabaseClient';
+import { subscribeSupabaseLatest } from './supabaseData';
 import { POLL_INTERVAL_MS } from './constants';
 import type { ConfigResponse, LatestResponse } from './types';
 
@@ -22,12 +24,30 @@ export interface LatestState {
   loading: boolean;
 }
 
-// poll GET /houses/:id/latest ทุก POLL_INTERVAL_MS (v1 — เผื่อเปลี่ยนเป็น SSE/WebSocket ทีหลัง)
+// โหมด Supabase: subscribe realtime (postgres_changes) ผ่าน subscribeSupabaseLatest แทนการ poll
+// โหมด backend REST/mock (เดิม): poll GET /houses/:id/latest ทุก POLL_INTERVAL_MS
 export function useLatest(houseId: string): LatestState {
   const [state, setState] = useState<LatestState>({ data: null, error: null, loading: true });
 
   useEffect(() => {
     let cancelled = false;
+
+    if (SUPABASE_ENABLED) {
+      const unsubscribe = subscribeSupabaseLatest(
+        houseId,
+        (data) => {
+          if (!cancelled) setState({ data, error: null, loading: false });
+        },
+        (message) => {
+          if (!cancelled) setState((s) => ({ ...s, error: message, loading: false }));
+        }
+      );
+      return () => {
+        cancelled = true;
+        unsubscribe();
+      };
+    }
+
     async function tick() {
       try {
         const data = await fetchLatest(houseId);
