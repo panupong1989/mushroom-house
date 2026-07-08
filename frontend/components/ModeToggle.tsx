@@ -16,7 +16,7 @@ export function ModeToggle({ mode, onChange, busy, safeHold }: ModeToggleProps) 
     <Card>
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-500">โหมดควบคุม (ทั้งระบบ)</h2>
+          <h2 className="text-[13px] font-medium text-gray-500">โหมดควบคุม (ทั้งระบบ)</h2>
           <p className="text-xs text-gray-400">สลับเป็น MANUAL เพื่อเทสอุปกรณ์หน้างาน — กลับ AUTO จะเคลียร์ override ทั้งหมดทันที</p>
         </div>
       </div>
