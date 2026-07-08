@@ -11,8 +11,6 @@ interface TempGaugeProps {
 const CX = 100;
 const CY = 100;
 const R_OUTER = 82;
-const R_INNER = 66;
-const R_NEEDLE = 74;
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
@@ -53,9 +51,8 @@ export function TempGauge({ value, goldMin, goldMax, coldLimit, dangerHot }: Tem
 
   const hasValue = value !== null && !Number.isNaN(value);
   const valueAngle = hasValue ? valueToAngle(value as number, min, max) : -90;
-  const progressPath = describeArc(CX, CY, R_INNER, -90, valueAngle);
+  const progressPath = describeArc(CX, CY, R_OUTER, -90, valueAngle);
   const color = hasValue ? zoneColor(value as number, goldMin, goldMax, coldLimit, dangerHot) : '#9CA3AF';
-  const needleTip = polarToCartesian(CX, CY, R_NEEDLE, valueAngle);
 
   return (
     <div className="flex flex-col items-center">
@@ -63,20 +60,8 @@ export function TempGauge({ value, goldMin, goldMax, coldLimit, dangerHot }: Tem
         <path d={trackPath} fill="none" stroke="#E7EEE6" strokeWidth={14} strokeLinecap="round" />
         <path d={goldBandPath} fill="none" stroke="#E3A73A" strokeOpacity={0.35} strokeWidth={14} strokeLinecap="round" />
         {hasValue && (
-          <>
-            <path d={progressPath} fill="none" stroke={color} strokeWidth={10} strokeLinecap="round" />
-            <line
-              x1={CX}
-              y1={CY}
-              x2={needleTip.x}
-              y2={needleTip.y}
-              stroke="#1E2B24"
-              strokeWidth={3.2}
-              strokeLinecap="round"
-            />
-          </>
+          <path d={progressPath} fill="none" stroke={color} strokeWidth={14} strokeLinecap="round" />
         )}
-        <circle cx={CX} cy={CY} r={6} fill="#1E2B24" />
         <text x={CX} y={92} textAnchor="middle" className="fill-gray-800" style={{ fontSize: 34, fontWeight: 700 }}>
           {hasValue ? (value as number).toFixed(1) : '—'}
         </text>
