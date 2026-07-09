@@ -118,7 +118,9 @@
     token/userId เป็น Supabase secret (ไม่ commit); ต้อง setup LINE channel + deploy + webhook (ดู README ในโฟลเดอร์)
 - [x] PWA: เพิ่มลงหน้าจอมือถือ
   - manifest (standalone) + icon.svg + service worker (network-first same-origin, ปล่อย Supabase/WS) + apple-web-app meta
-- [ ] retention/rollup `sensor_readings` (ข้อมูลจะโตเร็ว)
+- [x] retention/rollup `sensor_readings` (ข้อมูลจะโตเร็ว)
+  - 004: rollup รายชม. (min/max/avg/count) เก็บ 1 ปี + raw 30 วัน; prune แบบ soft (dry-run ก่อน);
+    migration ไม่ลบข้อมูลเอง (ตั้งแค่ cron rollup); กราฟ 24ชม.=raw / 7วัน+=rollup (air_history_rollup)
 - [ ] ทดสอบกับบอร์ด ESP32 จริง + เอกสารติดตั้งหน้างาน
 
 ## เมื่อทำเสร็จแต่ละข้อ
