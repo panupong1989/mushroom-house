@@ -38,6 +38,18 @@ export interface LatestResponse {
 
 export type ConfigResponse = Record<string, number>;
 
+export type Severity = 'info' | 'warn' | 'critical';
+
+// ตาราง alerts (supabase/migrations/001_init.sql) — read-only ฝั่ง frontend (anon SELECT)
+export interface AlertRow {
+  id: number;
+  ts: string;
+  severity: Severity;
+  code: string; // LOW_WATER | BED_OVERHEAT | HOT | SENSOR_LOST ...
+  message: string | null;
+  resolved_at: string | null; // null = ยังไม่หาย (เขียน resolved_at ต้องมี Auth — ดู roadmap)
+}
+
 export type CommandAction = 'on' | 'off' | 'auto';
 
 export interface CommandOkResult {

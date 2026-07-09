@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchConfig, fetchLatest } from './api';
+import { fetchAlerts, fetchConfig, fetchLatest } from './api';
 import { SUPABASE_ENABLED } from './supabaseClient';
-import { subscribeSupabaseLatest } from './supabaseData';
+import { subscribeSupabaseAlerts, subscribeSupabaseLatest } from './supabaseData';
 import { POLL_INTERVAL_MS } from './constants';
-import type { ConfigResponse, LatestResponse } from './types';
+import type { AlertRow, ConfigResponse, LatestResponse } from './types';
 
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState<number | null>(null);
@@ -61,6 +61,50 @@ export function useLatest(houseId: string): LatestState {
     return () => {
       cancelled = true;
       clearInterval(id);
+    };
+  }, [houseId]);
+
+  return state;
+}
+
+export interface AlertsState {
+  alerts: AlertRow[];
+  error: string | null;
+  loading: boolean;
+}
+
+// โหมด Supabase: subscribe realtime (alerts INSERT/UPDATE) — โหมด mock/dev: fetch ครั้งเดียว
+export function useAlerts(houseId: string): AlertsState {
+  const [state, setState] = useState<AlertsState>({ alerts: [], error: null, loading: true });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (SUPABASE_ENABLED) {
+      const unsubscribe = subscribeSupabaseAlerts(
+        houseId,
+        (alerts) => {
+          if (!cancelled) setState({ alerts, error: null, loading: false });
+        },
+        (message) => {
+          if (!cancelled) setState((s) => ({ ...s, error: message, loading: false }));
+        }
+      );
+      return () => {
+        cancelled = true;
+        unsubscribe();
+      };
+    }
+
+    fetchAlerts(houseId)
+      .then((alerts) => {
+        if (!cancelled) setState({ alerts, error: null, loading: false });
+      })
+      .catch(() => {
+        if (!cancelled) setState((s) => ({ ...s, error: 'โหลดการแจ้งเตือนไม่สำเร็จ', loading: false }));
+      });
+    return () => {
+      cancelled = true;
     };
   }, [houseId]);
 

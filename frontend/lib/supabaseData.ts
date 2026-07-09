@@ -6,6 +6,7 @@ import { RANGE_MS, type AirHistory, type HistoryRange, type Point } from './hist
 import type {
   ActuatorKind,
   ActuatorStateRow,
+  AlertRow,
   CommandAction,
   CommandResult,
   ConfigResponse,
@@ -13,6 +14,8 @@ import type {
   LatestResponse,
   SensorReadingRow,
 } from './types';
+
+const ALERTS_LIMIT = 50;
 
 // bucket_seconds ต่อช่วง — ให้ได้จำนวนจุดใกล้เคียง RANGE_BUCKETS (24h→30 นาที, 7d→3 ชม.)
 const RANGE_BUCKET_SEC: Record<HistoryRange, number> = { '24h': 1800, '7d': 10800 };
@@ -212,6 +215,74 @@ export async function fetchSupabaseAirHistory(houseId: string, range: HistoryRan
     if (row.rh_avg != null) rh.push({ t, v: row.rh_avg });
   }
   return { temp, rh };
+}
+
+// การแจ้งเตือน (read-only) — anon SELECT ได้ตาม RLS
+export async function fetchSupabaseAlerts(houseId: string): Promise<AlertRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('id,ts,severity,code,message,resolved_at')
+    .eq('house_id', houseId)
+    .order('ts', { ascending: false })
+    .limit(ALERTS_LIMIT);
+  if (error || !data) return [];
+  return data as AlertRow[];
+}
+
+// subscribe alerts realtime — initial fetch + INSERT (แจ้งเตือนใหม่) + UPDATE (resolved_at เปลี่ยน)
+export function subscribeSupabaseAlerts(
+  houseId: string,
+  onData: (rows: AlertRow[]) => void,
+  onError: (message: string) => void
+): () => void {
+  if (!supabase) {
+    onError('Supabase client ยังไม่พร้อมใช้งาน');
+    return () => {};
+  }
+  const client = supabase;
+  let cancelled = false;
+  const map = new Map<number, AlertRow>();
+  const emit = () => {
+    if (!cancelled) onData(Array.from(map.values()));
+  };
+
+  fetchSupabaseAlerts(houseId).then((rows) => {
+    if (cancelled) return;
+    for (const r of rows) map.set(r.id, r);
+    emit();
+  });
+
+  const channel = client
+    .channel(`house-${houseId}-alerts`)
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'alerts', filter: `house_id=eq.${houseId}` },
+      (payload) => {
+        const r = payload.new as AlertRow;
+        map.set(r.id, r);
+        emit();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'alerts', filter: `house_id=eq.${houseId}` },
+      (payload) => {
+        const r = payload.new as AlertRow;
+        map.set(r.id, r);
+        emit();
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onError('การเชื่อมต่อ realtime การแจ้งเตือนขัดข้อง — กำลังลองใหม่');
+      }
+    });
+
+  return () => {
+    cancelled = true;
+    client.removeChannel(channel);
+  };
 }
 
 export async function fetchSupabaseConfig(houseId: string, profile?: string): Promise<ConfigResponse> {

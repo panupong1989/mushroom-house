@@ -106,7 +106,8 @@
   - เลือก "แปลงเป็น dev/mock tool" (ไม่ลบ — เก็บ 49 safety/interlock tests + local dev + legacy MQTT); ลบถาวร = แตะ architecture ต้องถาม Beer
 - [x] UI v2: กราฟย้อนหลัง (อุณหภูมิ/ความชื้น 24 ชม. / 7 วัน) จาก `sensor_readings` (read-only)
   - aggregate ฝั่ง DB (RPC `air_history` — supabase/migrations/002) เพราะ readings โตเร็ว; SVG inline ไม่เพิ่ม dep; ต้องรัน migration 002 ก่อนใช้
-- [ ] UI v3: หน้าแจ้งเตือน (อ่าน `alerts`) (read-only; "เคลียร์ alert" เขียน resolved_at ต้องมี Auth ก่อน — เลื่อนไปหลัง Auth)
+- [x] UI v3: หน้าแจ้งเตือน (อ่าน `alerts`) (read-only; "เคลียร์ alert" เขียน resolved_at ต้องมี Auth ก่อน — เลื่อนไปหลัง Auth)
+  - AlertsSection: fetch + realtime (INSERT/UPDATE) จาก Supabase; เรียง unresolved>รุนแรง>ใหม่; mock สำหรับ dev; 8 unit test
 - [ ] Auth: ปิดไม่ให้คนนอกกดสั่งอุปกรณ์ (Supabase Auth + RLS)
 - [ ] UI v2: หน้า Settings (แก้ setpoint จาก Supabase `control_config`) + validate ช่วงค่า — **หลัง Auth** (ห้าม anon เขียน setpoint เด็ดขาด: คุมฮีทเตอร์/ปั๊มโดยตรง)
 - [ ] แจ้งเตือนเข้า LINE (Supabase Edge Function → LINE Messaging API)

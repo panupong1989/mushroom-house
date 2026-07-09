@@ -1,7 +1,7 @@
-import type { ActuatorKind, CommandAction, CommandResult, ConfigResponse, LatestResponse } from './types';
-import { buildMockAirHistory, buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
+import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse } from './types';
+import { buildMockAirHistory, buildMockAlerts, buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
 import { SUPABASE_ENABLED } from './supabaseClient';
-import { fetchSupabaseAirHistory, fetchSupabaseConfig, sendSupabaseCommand } from './supabaseData';
+import { fetchSupabaseAirHistory, fetchSupabaseAlerts, fetchSupabaseConfig, sendSupabaseCommand } from './supabaseData';
 import { RANGE_BUCKETS, RANGE_MS, bucketAirHistory, type AirHistory, type HistoryRange } from './history';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
@@ -44,6 +44,13 @@ export function fetchAirHistory(houseId: string = HOUSE_ID, range: HistoryRange 
   const stepMs = RANGE_MS[range] / 240; // ~240 จุดดิบก่อน bucket ให้เส้นเนียน
   const rows = buildMockAirHistory(since, now, stepMs);
   return Promise.resolve(bucketAirHistory(rows, since, now, RANGE_BUCKETS[range]));
+}
+
+// การแจ้งเตือน (read-only): Supabase > mock. โหมด Supabase ใช้ subscribeSupabaseAlerts (realtime)
+// ผ่าน useAlerts แทน — fetch นี้ไว้สำหรับ mock/dev (backend REST เดิมไม่มี endpoint alerts)
+export function fetchAlerts(houseId: string = HOUSE_ID): Promise<AlertRow[]> {
+  if (SUPABASE_ENABLED) return fetchSupabaseAlerts(houseId);
+  return Promise.resolve(buildMockAlerts());
 }
 
 export function fetchConfig(houseId: string = HOUSE_ID, profile?: string): Promise<ConfigResponse> {

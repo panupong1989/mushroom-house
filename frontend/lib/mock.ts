@@ -6,6 +6,7 @@ import { FALLBACK_SETPOINTS } from './constants';
 import type {
   ActuatorKind,
   ActuatorStateRow,
+  AlertRow,
   CommandAction,
   CommandResult,
   ConfigResponse,
@@ -136,6 +137,16 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
 
 export function buildMockConfig(): ConfigResponse {
   return { ...FALLBACK_SETPOINTS };
+}
+
+// การแจ้งเตือนจำลอง (โหมด mock/dev) — โชว์ทั้งที่ยังไม่หายและที่หายแล้ว ครบทุกระดับความรุนแรง
+export function buildMockAlerts(nowMs: number = Date.now()): AlertRow[] {
+  const ago = (m: number) => new Date(nowMs - m * 60000).toISOString();
+  return [
+    { id: 3, ts: ago(2), severity: 'critical', code: 'LOW_WATER', message: 'ระดับน้ำต่ำ — ล็อกปั๊ม/หมอกอัตโนมัติ', resolved_at: null },
+    { id: 2, ts: ago(48), severity: 'warn', code: 'HOT', message: 'อากาศร้อน 34.6°C — เปิดพัดลมดูด', resolved_at: ago(41) },
+    { id: 1, ts: ago(200), severity: 'info', code: 'SENSOR_LOST', message: 'เซนเซอร์อากาศจุดกลางหลุดชั่วคราว', resolved_at: ago(196) },
+  ];
 }
 
 // สร้าง air_th readings ย้อนหลังสำหรับกราฟ (โหมด mock/dev) — เก็บทุก stepMs โดยใช้ buildSnapshot เดิม
