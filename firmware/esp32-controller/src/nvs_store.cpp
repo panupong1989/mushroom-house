@@ -46,3 +46,18 @@ void nvs_save_setpoints(const Setpoints &sp){
   p.putUChar("lt_off", sp.light_off_hour);
   p.end();
 }
+
+AppMode nvs_load_mode(AppMode def) {
+  Preferences p;
+  if (!p.begin(NS, true)) return def;
+  uint8_t v = p.getUChar("app_mode", (uint8_t)def);
+  p.end();
+  return (v == (uint8_t)APP_LOCAL) ? APP_LOCAL : APP_INTERNET;
+}
+
+void nvs_save_mode(AppMode m) {
+  Preferences p;
+  if (!p.begin(NS, false)) return;
+  p.putUChar("app_mode", (uint8_t)m);
+  p.end();
+}

@@ -107,14 +107,20 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
   const sensors: SensorReadingRow[] = [];
   let id = 1;
 
+  // sensorId คงที่ต่อ "เซนเซอร์จริง" (ตรงกับ sensors.id ใน seed) — temp/rh ของจุดเดียวกันใช้ id เดียว
+  // ให้ lib/derive.ts จัดกลุ่มด้วย sensorId ได้เหมือน path Supabase จริง (ดู supabase/migrations/001_init.sql)
+  const airSensorId: Record<Location, number> = { head: 1, mid: 2, tail: 3 };
+  const bedSensorId: Record<Location, number> = { head: 4, mid: 5, tail: 6 };
+  const waterSensorId = 7;
+
   LOCATIONS.forEach((loc) => {
-    sensors.push({ id: id++, kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts: snap.ts });
-    sensors.push({ id: id++, kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts: snap.ts });
+    sensors.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts: snap.ts });
+    sensors.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts: snap.ts });
   });
   LOCATIONS.forEach((loc) => {
-    sensors.push({ id: id++, kind: 'bed_temp', location: loc, metric: 'temp', value: snap.bedTemps[loc], ts: snap.ts });
+    sensors.push({ id: id++, sensorId: bedSensorId[loc], kind: 'bed_temp', location: loc, metric: 'temp', value: snap.bedTemps[loc], ts: snap.ts });
   });
-  sensors.push({ id: id++, kind: 'water_level', location: 'tank', metric: 'level', value: snap.waterOk ? 1 : 0, ts: snap.ts });
+  sensors.push({ id: id++, sensorId: waterSensorId, kind: 'water_level', location: 'tank', metric: 'level', value: snap.waterOk ? 1 : 0, ts: snap.ts });
 
   const actuators: ActuatorStateRow[] = [
     { kind: 'mist', state: snap.mist, ts: snap.ts },
@@ -130,6 +136,23 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
 
 export function buildMockConfig(): ConfigResponse {
   return { ...FALLBACK_SETPOINTS };
+}
+
+// สร้าง air_th readings ย้อนหลังสำหรับกราฟ (โหมด mock/dev) — เก็บทุก stepMs โดยใช้ buildSnapshot เดิม
+// คืน SensorReadingRow[] ให้ lib/history.ts bucketAirHistory ประมวลผลต่อ (เส้นทางเดียวกับข้อมูลจริง)
+export function buildMockAirHistory(sinceMs: number, nowMs: number, stepMs: number): SensorReadingRow[] {
+  const rows: SensorReadingRow[] = [];
+  const airSensorId: Record<Location, number> = { head: 1, mid: 2, tail: 3 };
+  let id = 1;
+  for (let t = sinceMs; t <= nowMs; t += stepMs) {
+    const snap = buildSnapshot(t);
+    const ts = new Date(t).toISOString();
+    LOCATIONS.forEach((loc) => {
+      rows.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts });
+      rows.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts });
+    });
+  }
+  return rows;
 }
 
 function delay(ms: number): Promise<void> {

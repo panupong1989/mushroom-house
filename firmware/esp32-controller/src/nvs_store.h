@@ -5,3 +5,7 @@
 void nvs_load_setpoints(Setpoints &sp);
 // เซฟค่า setpoint ปัจจุบันทั้งหมดลง NVS
 void nvs_save_setpoints(const Setpoints &sp);
+
+// app mode (Internet/Local) — ค่าตั้งใจของผู้ใช้ (คนละเรื่องกับ fallback อัตโนมัติตอนเน็ตหลุด)
+AppMode nvs_load_mode(AppMode def);
+void    nvs_save_mode(AppMode m);

@@ -1,7 +1,8 @@
 import type { ActuatorKind, CommandAction, CommandResult, ConfigResponse, LatestResponse } from './types';
-import { buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
+import { buildMockAirHistory, buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
 import { SUPABASE_ENABLED } from './supabaseClient';
-import { fetchSupabaseConfig, sendSupabaseCommand } from './supabaseData';
+import { fetchSupabaseAirHistory, fetchSupabaseConfig, sendSupabaseCommand } from './supabaseData';
+import { RANGE_BUCKETS, RANGE_MS, bucketAirHistory, type AirHistory, type HistoryRange } from './history';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 export const HOUSE_ID = process.env.NEXT_PUBLIC_HOUSE_ID ?? 'house-01';
@@ -32,6 +33,17 @@ async function getJson<T>(path: string): Promise<T> {
 export function fetchLatest(houseId: string = HOUSE_ID): Promise<LatestResponse> {
   if (USE_MOCK) return Promise.resolve(buildMockLatest(Date.now()));
   return getJson<LatestResponse>(`/houses/${houseId}/latest`);
+}
+
+// กราฟย้อนหลัง (read-only): Supabase RPC (aggregate ฝั่ง DB) > mock (bucket ฝั่ง client)
+// backend REST เดิมไม่มี endpoint ประวัติ — ใช้ mock ให้กราฟยังโชว์ได้ตอน dev
+export function fetchAirHistory(houseId: string = HOUSE_ID, range: HistoryRange = '24h'): Promise<AirHistory> {
+  if (SUPABASE_ENABLED) return fetchSupabaseAirHistory(houseId, range);
+  const now = Date.now();
+  const since = now - RANGE_MS[range];
+  const stepMs = RANGE_MS[range] / 240; // ~240 จุดดิบก่อน bucket ให้เส้นเนียน
+  const rows = buildMockAirHistory(since, now, stepMs);
+  return Promise.resolve(bucketAirHistory(rows, since, now, RANGE_BUCKETS[range]));
 }
 
 export function fetchConfig(houseId: string = HOUSE_ID, profile?: string): Promise<ConfigResponse> {
