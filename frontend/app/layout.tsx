@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans_Thai } from 'next/font/google';
 import './globals.css';
+import { ServiceWorkerRegistrar } from '@/components/ServiceWorkerRegistrar';
 
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
   subsets: ['thai', 'latin'],
@@ -11,6 +12,10 @@ const ibmPlexSansThai = IBM_Plex_Sans_Thai({
 export const metadata: Metadata = {
   title: 'ระบบควบคุมโรงเพาะเห็ดฟาง',
   description: 'Dashboard ตรวจสอบและควบคุมโรงเพาะเห็ดฟาง',
+  applicationName: 'โรงเห็ดฟาง',
+  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  // เพิ่มลงหน้าจอมือถือ (iOS) แล้วเปิดแบบ standalone
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'โรงเห็ดฟาง' },
 };
 
 // colorScheme: 'light' -> <meta name="color-scheme" content="light"> กัน dark mode มือถือทำพื้นดำ (ตาม CLAUDE.md)
@@ -25,7 +30,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="th" className={ibmPlexSansThai.variable} style={{ colorScheme: 'light' }}>
-      <body className="min-h-screen bg-bg font-sans text-gray-800 antialiased">{children}</body>
+      <body className="min-h-screen bg-bg font-sans text-gray-800 antialiased">
+        {children}
+        <ServiceWorkerRegistrar />
+      </body>
     </html>
   );
 }

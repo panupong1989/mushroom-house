@@ -116,7 +116,8 @@
 - [x] แจ้งเตือนเข้า LINE (Supabase Edge Function → LINE Messaging API)
   - Edge Function notify-line (Database Webhook alerts INSERT → LINE push, default critical);
     token/userId เป็น Supabase secret (ไม่ commit); ต้อง setup LINE channel + deploy + webhook (ดู README ในโฟลเดอร์)
-- [ ] PWA: เพิ่มลงหน้าจอมือถือ
+- [x] PWA: เพิ่มลงหน้าจอมือถือ
+  - manifest (standalone) + icon.svg + service worker (network-first same-origin, ปล่อย Supabase/WS) + apple-web-app meta
 - [ ] retention/rollup `sensor_readings` (ข้อมูลจะโตเร็ว)
 - [ ] ทดสอบกับบอร์ด ESP32 จริง + เอกสารติดตั้งหน้างาน
 
