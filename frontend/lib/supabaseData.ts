@@ -200,7 +200,9 @@ export function subscribeSupabaseLatest(
 export async function fetchSupabaseAirHistory(houseId: string, range: HistoryRange): Promise<AirHistory> {
   if (!supabase) return { temp: [], rh: [] };
   const sinceIso = new Date(Date.now() - RANGE_MS[range]).toISOString();
-  const { data, error } = await supabase.rpc('air_history', {
+  // 24 ชม. อ่าน raw (air_history); 7 วัน+ อ่าน rollup รายชั่วโมง (air_history_rollup) — เบากว่า/ข้อมูลไม่โดน prune
+  const rpcName = range === '24h' ? 'air_history' : 'air_history_rollup';
+  const { data, error } = await supabase.rpc(rpcName, {
     p_house_id: houseId,
     p_since: sinceIso,
     p_bucket_seconds: RANGE_BUCKET_SEC[range],
