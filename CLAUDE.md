@@ -121,7 +121,9 @@
 - [x] retention/rollup `sensor_readings` (ข้อมูลจะโตเร็ว)
   - 004: rollup รายชม. (min/max/avg/count) เก็บ 1 ปี + raw 30 วัน; prune แบบ soft (dry-run ก่อน);
     migration ไม่ลบข้อมูลเอง (ตั้งแค่ cron rollup); กราฟ 24ชม.=raw / 7วัน+=rollup (air_history_rollup)
-- [ ] ทดสอบกับบอร์ด ESP32 จริง + เอกสารติดตั้งหน้างาน
+- [~] ทดสอบกับบอร์ด ESP32 จริง + เอกสารติดตั้งหน้างาน
+  - [x] เอกสารติดตั้งหน้างาน (docs/07-install.md — pin map, wiring, flash, cloud, commissioning + safety test checklist)
+  - [ ] ทดสอบบอร์ด ESP32 จริง (ต้องมีฮาร์ดแวร์ — ทำ §6 safety test ตาม 07-install.md; Claude ช่วย debug ตอนต่อ)
 
 ## เมื่อทำเสร็จแต่ละข้อ
 
