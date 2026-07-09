@@ -7,7 +7,11 @@ static Mode mode = M_FRUITING;
 static Mode auto_mode = M_FRUITING;  // เฟส auto ล่าสุด (SPAWN_RUN/FRUITING) ไว้กลับหลัง MANUAL
 static uint32_t last_vent=0, vent_started=0; static bool venting=false;
 static uint32_t mist_started=0; static bool mist_on=false;
-static float last_air_temp_ctrl = NAN;   // แคชไว้เช็ค interlock ตอนสั่ง manual (จาก mqtt callback)
+// แคช snapshot ล่าสุดไว้เช็ค INTERLOCK เหล็กตอนสั่ง manual (คำสั่งมาคนละจังหวะกับ control_step —
+// จาก Supabase poll / ปุ่ม local web) ปิดช่อง ≤CONTROL_PERIOD_MS ที่ manual จะติดก่อน safety_check รอบถัดไปตัด
+static float last_air_temp_ctrl = NAN;   // < temp_heater_on หรือ unknown(NAN) -> ห้ามพ่นหมอก (COLD_INTERLOCK)
+static bool  last_water_ok      = false; // default false = ห้ามพ่นจนกว่าจะยืนยันน้ำพอ (กันปั๊ม dry-run)
+static float last_bed_max       = NAN;   // >= bed_danger -> กองร้อน (unknown ไม่บล็อก เท่ากับ safety.cpp)
 
 // min-on/min-off ต่อโหลด (กันกระตุก) — หน่วย ms
 static const uint32_t HEAT_MIN=30000, EXH_MIN=20000, MIST_MIN=5000;
@@ -89,8 +93,15 @@ void control_manual_set(const char *actuator, const char *action, uint32_t ttl_s
   if (strcmp(action,"on") && strcmp(action,"off")) return;   // action ไม่รู้จัก
   bool on = !strcmp(action,"on");
 
-  // INTERLOCK เหล็ก: ห้าม MIST ON ถ้า T_air < temp_heater_on แม้เป็นคำสั่ง manual
-  if (idx==MI_MIST && on && !(last_air_temp_ctrl >= SP.temp_heater_on)) return;
+  // ===== INTERLOCK เหล็ก: คำสั่งคนไม่ชนะ safety (เช็ค snapshot ล่าสุด แม้เป็นคำสั่ง manual) =====
+  // mist ON: น้ำต่ำ / กองร้อน>=danger / อากาศเย็น<heater_on -> บล็อกทั้งหมด (mirror safety.cpp + commandGuard.ts)
+  if (idx==MI_MIST && on) {
+    if (!last_water_ok) return;                              // LOW_WATER: น้ำต่ำ ห้ามพ่น (กันปั๊มไหม้ dry-run)
+    if (last_bed_max >= SP.bed_danger) return;               // BED_OVERHEAT: กองร้อน ห้ามพ่น
+    if (!(last_air_temp_ctrl >= SP.temp_heater_on)) return;  // COLD_INTERLOCK: อากาศเย็น/unknown ห้ามพ่นเด็ดขาด
+  }
+  // heater ON: กองร้อน>=danger ห้ามเปิด (safety.cpp บังคับ heater OFF ตอน BED_OVERHEAT อยู่แล้ว)
+  if (idx==MI_HEATER && on && last_bed_max >= SP.bed_danger) return;
 
   // HEATER และ MIST ห้าม ON พร้อมกัน
   if (idx==MI_HEATER && on){ manual[MI_MIST].active=false; relay_set(RELAY_MIST,false,MIST_MIN,MIST_MIN); mist_on=false; }
@@ -136,8 +147,17 @@ static void handle_ventilation(){
   if (venting && now-vent_started >= SP.vent_duration_ms) { venting=false; last_vent=now; relay_set(RELAY_EXHAUST,false,EXH_MIN,EXH_MIN); }
 }
 
+// อัปเดตแคช snapshot ให้ control_manual_set เช็ค interlock ได้ (air + น้ำ + กอง)
+// main เรียกทุกรอบ "ก่อน safety_check" เพื่อให้ cache สดแม้รอบนั้น safety trip (control_step ไม่ถูกเรียก)
+// -> ปิดช่อง manual ที่จะติดตอน LOW_WATER/BED_OVERHEAT trip กำลังเกิดอยู่
+void control_cache_snapshot(const SensorSnapshot &s){
+  last_air_temp_ctrl = s.air_temp_ctrl;
+  last_water_ok      = s.water_ok;
+  last_bed_max       = s.bed_temp_max;
+}
+
 void control_step(const SensorSnapshot &s){
-  last_air_temp_ctrl = s.air_temp_ctrl;   // แคชไว้ให้ control_manual_set เช็ค interlock ได้
+  control_cache_snapshot(s);
   control_manual_tick();
   if (mode==M_MANUAL || mode==M_SAFE_HOLD) return;   // manual/ปลอดภัยจัดการที่อื่น
 

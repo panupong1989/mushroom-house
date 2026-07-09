@@ -10,6 +10,7 @@
 #  endif
 #endif
 #ifndef SECRET_WIFI_SSID
+#  warning "secrets.h not found - building with CHANGEME placeholders. Copy secrets.h.example to src/secrets.h and fill real WiFi/Supabase creds before deploying (device will NOT connect otherwise)."
 #  define SECRET_WIFI_SSID            "CHANGEME"
 #  define SECRET_WIFI_PASS            "CHANGEME"
 #  define SECRET_SUPABASE_URL         "https://CHANGEME.supabase.co"
