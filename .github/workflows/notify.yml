@@ -1,0 +1,43 @@
+name: Notify
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+jobs:
+  pr-opened:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: ntfy — PR รอรีวิว
+        run: |
+          curl -H "Title: PR #${{ github.event.pull_request.number }} รอรีวิว" \
+               -H "Priority: high" \
+               -H "Tags: eyes" \
+               -H "Click: ${{ github.event.pull_request.html_url }}" \
+               -d "${{ github.event.pull_request.title }}" \
+               https://ntfy.sh/mushroom-beer-x7k2
+
+  ci-done:
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - name: ntfy — CI เสร็จ
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
+            TITLE="CI เขียว ✅"
+            TAGS="white_check_mark"
+            PRIO="default"
+          else
+            TITLE="CI แดง ❌"
+            TAGS="rotating_light"
+            PRIO="high"
+          fi
+          curl -H "Title: $TITLE" \
+               -H "Priority: $PRIO" \
+               -H "Tags: $TAGS" \
+               -H "Click: ${{ github.event.workflow_run.html_url }}" \
+               -d "branch: ${{ github.event.workflow_run.head_branch }}" \
+               https://ntfy.sh/mushroom-beer-x7k2
