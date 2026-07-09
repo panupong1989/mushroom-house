@@ -1,11 +1,33 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { fetchAlerts, fetchConfig, fetchLatest } from './api';
-import { SUPABASE_ENABLED } from './supabaseClient';
+import { SUPABASE_ENABLED, supabase } from './supabaseClient';
 import { subscribeSupabaseAlerts, subscribeSupabaseLatest } from './supabaseData';
 import { POLL_INTERVAL_MS } from './constants';
 import type { AlertRow, ConfigResponse, LatestResponse } from './types';
+
+export interface SessionState {
+  session: Session | null;
+  loading: boolean;
+}
+
+// ติดตาม session ของ Supabase Auth (Email+Password) — persist ใน localStorage โดย default
+// โหมด mock/dev (ไม่มี Supabase) คืน loading=false, session=null (หน้าใช้ !SUPABASE_ENABLED เป็น "authed")
+export function useSession(): SessionState {
+  const [state, setState] = useState<SessionState>({ session: null, loading: true });
+  useEffect(() => {
+    if (!supabase) {
+      setState({ session: null, loading: false });
+      return;
+    }
+    supabase.auth.getSession().then(({ data }) => setState({ session: data.session, loading: false }));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => setState({ session, loading: false }));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+  return state;
+}
 
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState<number | null>(null);

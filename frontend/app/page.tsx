@@ -11,8 +11,10 @@ import { ModeToggle, type SystemMode } from '@/components/ModeToggle';
 import { ActuatorPanel } from '@/components/ActuatorPanel';
 import { HistorySection } from '@/components/HistorySection';
 import { AlertsSection } from '@/components/AlertsSection';
+import { LoginPanel } from '@/components/LoginPanel';
 import { ToastStack, type Toast } from '@/components/ToastStack';
-import { useConfig, useLatest, useNow } from '@/lib/hooks';
+import { useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
+import { SUPABASE_ENABLED } from '@/lib/supabaseClient';
 import { deriveTelemetry } from '@/lib/derive';
 import { HOUSE_ID, sendActuatorCommand } from '@/lib/api';
 import { ACTUATOR_KINDS, FALLBACK_SETPOINTS, sensorPointLabel } from '@/lib/constants';
@@ -25,6 +27,9 @@ export default function Page() {
   const { data: latest, error } = useLatest(houseId);
   const config = useConfig(houseId);
   const now = useNow();
+  const { session } = useSession();
+  // โหมด Supabase: ต้อง login ถึงจะสั่งงานได้ (RLS บังคับจริงด้วย) — โหมด mock/dev ปลดล็อกให้เลย
+  const canControl = !SUPABASE_ENABLED || !!session;
 
   const [systemMode, setSystemModeState] = useState<SystemMode>('AUTO');
   const [clearingOverrides, setClearingOverrides] = useState(false);
@@ -119,8 +124,18 @@ export default function Page() {
       <HistorySection houseId={houseId} />
       <AlertsSection houseId={houseId} />
 
-      <ModeToggle mode={systemMode} onChange={setSystemMode} busy={clearingOverrides} safeHold={!!safeHold} />
-      <ActuatorPanel telemetry={telemetry} setpoints={setpoints} locked={controlsLocked} houseId={houseId} />
+      {SUPABASE_ENABLED && <LoginPanel session={session} />}
+
+      {canControl ? (
+        <>
+          <ModeToggle mode={systemMode} onChange={setSystemMode} busy={clearingOverrides} safeHold={!!safeHold} />
+          <ActuatorPanel telemetry={telemetry} setpoints={setpoints} locked={controlsLocked} houseId={houseId} />
+        </>
+      ) : (
+        <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
+          🔒 เข้าสู่ระบบด้านบนเพื่อปลดล็อกการสั่งงานอุปกรณ์
+        </div>
+      )}
 
       <ToastStack toasts={toasts} />
     </main>
