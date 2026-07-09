@@ -102,7 +102,8 @@
   - สลับโหมด: NVS config + auto fallback → Local ถ้าต่อเน็ตไม่ได้
   - service_role key เก็บใน NVS/secrets ที่ gitignore (ห้าม commit)
   - ปิด MQTT code เดิม (`#ifdef` ได้)
-- [ ] ล้าง backend Node เดิม (Postgres+MQTT) ที่ไม่ใช้แล้ว หรือแปลงเป็น dev/mock tool
+- [x] ล้าง backend Node เดิม (Postgres+MQTT) ที่ไม่ใช้แล้ว หรือแปลงเป็น dev/mock tool
+  - เลือก "แปลงเป็น dev/mock tool" (ไม่ลบ — เก็บ 49 safety/interlock tests + local dev + legacy MQTT); ลบถาวร = แตะ architecture ต้องถาม Beer
 - [ ] UI v2: หน้า Settings (แก้ setpoint จาก Supabase `control_config`) + validate ช่วงค่า
 - [ ] UI v2: กราฟย้อนหลัง (อุณหภูมิ/ความชื้น 24 ชม. / 7 วัน) จาก `sensor_readings`
 - [ ] UI v3: หน้าแจ้งเตือน (อ่าน `alerts`) + เคลียร์ alert
