@@ -1,5 +1,8 @@
-#include "mqtt_client.h"
+// LEGACY MQTT — ปิดโดย default (โหมดใหม่ใช้ Supabase REST + local web server ดู main.cpp)
+// เปิดใหม่ได้ด้วย build flag -DUSE_MQTT=1 (+ เพิ่ม knolleary/PubSubClient กลับใน platformio.ini)
 #include "config.h"
+#if USE_MQTT
+#include "mqtt_client.h"
 #include "control_fsm.h"
 #include "nvs_store.h"
 #include <WiFi.h>
@@ -90,3 +93,4 @@ void mqtt_publish_heartbeat(){
   StaticJsonDocument<128> d; d["uptime"]=millis()/1000; d["rssi"]=WiFi.RSSI(); d["fw"]=FW_VERSION;
   char buf[128]; size_t nn=serializeJson(d,buf); char t[64]; topic(t,sizeof(t),"heartbeat"); mqtt.publish(t,(uint8_t*)buf,nn,true);
 }
+#endif // USE_MQTT

@@ -7,3 +7,8 @@ dist/
 firmware/**/.pio/
 coverage/
 *.local
+
+# firmware secrets — WiFi creds + Supabase service_role key (ห้าม commit เด็ดขาด)
+firmware/**/secrets.h
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
