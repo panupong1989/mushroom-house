@@ -1,6 +1,20 @@
 #pragma once
 #include <stdint.h>
-#include "secrets.h"   // WiFi + Supabase creds (gitignored) — ดู secrets.h.example
+
+// secrets.h ถูก gitignore (มี service_role key) — มีเฉพาะเครื่อง dev ที่ cp มาจาก secrets.h.example
+// ใช้ __has_include เพื่อให้ CI / checkout ใหม่ (ไม่มี secrets.h) ยัง build ผ่านด้วยค่า placeholder
+// ตอนใช้งานจริงหน้างานต้องมี secrets.h จริง ไม่งั้นจะต่อ WiFi/Supabase ไม่ได้ (ค่า CHANGEME)
+#if defined(__has_include)
+#  if __has_include("secrets.h")
+#    include "secrets.h"
+#  endif
+#endif
+#ifndef SECRET_WIFI_SSID
+#  define SECRET_WIFI_SSID            "CHANGEME"
+#  define SECRET_WIFI_PASS            "CHANGEME"
+#  define SECRET_SUPABASE_URL         "https://CHANGEME.supabase.co"
+#  define SECRET_SUPABASE_SERVICE_KEY "CHANGEME"
+#endif
 
 // ---------- Identity ----------
 #define HOUSE_ID        "house-01"
