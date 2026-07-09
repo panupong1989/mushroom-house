@@ -113,7 +113,9 @@
     หน้า login + ซ่อนปุ่มสั่งงานถ้ายังไม่ login; สร้าง user เองใน dashboard (ไม่เปิด public sign-up)
 - [x] UI v2: หน้า Settings (แก้ setpoint จาก Supabase `control_config`) + validate ช่วงค่า — **หลัง Auth** (ห้าม anon เขียน setpoint เด็ดขาด: คุมฮีทเตอร์/ปั๊มโดยตรง)
   - SettingsPanel (เฉพาะตอน login); upsert control_config ของ active profile; validateSetpoints (port จาก backend, 11 test); render เฉพาะ key ที่มีใน profile
-- [ ] แจ้งเตือนเข้า LINE (Supabase Edge Function → LINE Messaging API)
+- [x] แจ้งเตือนเข้า LINE (Supabase Edge Function → LINE Messaging API)
+  - Edge Function notify-line (Database Webhook alerts INSERT → LINE push, default critical);
+    token/userId เป็น Supabase secret (ไม่ commit); ต้อง setup LINE channel + deploy + webhook (ดู README ในโฟลเดอร์)
 - [ ] PWA: เพิ่มลงหน้าจอมือถือ
 - [ ] retention/rollup `sensor_readings` (ข้อมูลจะโตเร็ว)
 - [ ] ทดสอบกับบอร์ด ESP32 จริง + เอกสารติดตั้งหน้างาน
