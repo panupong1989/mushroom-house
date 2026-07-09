@@ -12,6 +12,7 @@ import { ActuatorPanel } from '@/components/ActuatorPanel';
 import { HistorySection } from '@/components/HistorySection';
 import { AlertsSection } from '@/components/AlertsSection';
 import { LoginPanel } from '@/components/LoginPanel';
+import { SettingsPanel } from '@/components/SettingsPanel';
 import { ToastStack, type Toast } from '@/components/ToastStack';
 import { useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
 import { SUPABASE_ENABLED } from '@/lib/supabaseClient';
@@ -130,6 +131,7 @@ export default function Page() {
         <>
           <ModeToggle mode={systemMode} onChange={setSystemMode} busy={clearingOverrides} safeHold={!!safeHold} />
           <ActuatorPanel telemetry={telemetry} setpoints={setpoints} locked={controlsLocked} houseId={houseId} />
+          <SettingsPanel houseId={houseId} />
         </>
       ) : (
         <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">

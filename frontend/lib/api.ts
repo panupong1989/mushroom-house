@@ -1,7 +1,13 @@
 import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse } from './types';
 import { buildMockAirHistory, buildMockAlerts, buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
 import { SUPABASE_ENABLED } from './supabaseClient';
-import { fetchSupabaseAirHistory, fetchSupabaseAlerts, fetchSupabaseConfig, sendSupabaseCommand } from './supabaseData';
+import {
+  fetchSupabaseAirHistory,
+  fetchSupabaseAlerts,
+  fetchSupabaseConfig,
+  sendSupabaseCommand,
+  updateSupabaseConfig,
+} from './supabaseData';
 import { RANGE_BUCKETS, RANGE_MS, bucketAirHistory, type AirHistory, type HistoryRange } from './history';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
@@ -51,6 +57,15 @@ export function fetchAirHistory(houseId: string = HOUSE_ID, range: HistoryRange 
 export function fetchAlerts(houseId: string = HOUSE_ID): Promise<AlertRow[]> {
   if (SUPABASE_ENABLED) return fetchSupabaseAlerts(houseId);
   return Promise.resolve(buildMockAlerts());
+}
+
+// แก้ setpoint: Supabase (upsert control_config, ต้อง login) > mock (dev = ตอบ ok เฉยๆ ไม่ persist)
+export function updateConfig(
+  houseId: string = HOUSE_ID,
+  updates: Record<string, number>
+): Promise<{ ok: boolean; message?: string }> {
+  if (SUPABASE_ENABLED) return updateSupabaseConfig(houseId, updates);
+  return Promise.resolve({ ok: true });
 }
 
 export function fetchConfig(houseId: string = HOUSE_ID, profile?: string): Promise<ConfigResponse> {

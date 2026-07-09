@@ -307,6 +307,33 @@ export async function fetchSupabaseConfig(houseId: string, profile?: string): Pr
   return config;
 }
 
+// แก้ setpoint (โหมด Internet) — upsert control_config ของ active profile
+// ต้อง login (RLS: authenticated เท่านั้น insert/update control_config ได้ — ดู 003_auth_rls.sql)
+export async function updateSupabaseConfig(
+  houseId: string,
+  updates: Record<string, number>
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+
+  const { data: house, error: hErr } = await supabase
+    .from('houses')
+    .select('active_profile')
+    .eq('id', houseId)
+    .maybeSingle();
+  if (hErr) return { ok: false, message: hErr.message };
+  const profile = house?.active_profile ?? 'fruiting';
+
+  const rows = Object.entries(updates).map(([key, value]) => ({ house_id: houseId, profile, key, value }));
+  if (rows.length === 0) return { ok: true };
+
+  const { error } = await supabase.from('control_config').upsert(rows, { onConflict: 'house_id,profile,key' });
+  if (error) {
+    // RLS ปฏิเสธ (ยังไม่ login / token หมดอายุ) มักได้ code 401/42501
+    return { ok: false, message: `บันทึกไม่สำเร็จ — ${error.message}` };
+  }
+  return { ok: true };
+}
+
 // สั่ง manual (โหมด Internet) = insert แถวลงตาราง commands — ESP32 (service_role) จะรับคำสั่งไป
 // ทีหลัง (firmware นอกขอบเขต PR นี้) จึงตอบแค่ "ส่งคำสั่งแล้ว" ไม่ใช่ "ทำงานแล้วจริง"
 // interlock reject ของจริงจะมาเป็น event/สถานะย้อนกลับทีหลังเมื่อ firmware รองรับ (ดู supabase/README.md)
