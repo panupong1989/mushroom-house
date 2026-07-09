@@ -104,11 +104,11 @@
   - ปิด MQTT code เดิม (`#ifdef` ได้)
 - [x] ล้าง backend Node เดิม (Postgres+MQTT) ที่ไม่ใช้แล้ว หรือแปลงเป็น dev/mock tool
   - เลือก "แปลงเป็น dev/mock tool" (ไม่ลบ — เก็บ 49 safety/interlock tests + local dev + legacy MQTT); ลบถาวร = แตะ architecture ต้องถาม Beer
-- [ ] UI v2: หน้า Settings (แก้ setpoint จาก Supabase `control_config`) + validate ช่วงค่า
-- [ ] UI v2: กราฟย้อนหลัง (อุณหภูมิ/ความชื้น 24 ชม. / 7 วัน) จาก `sensor_readings`
-- [ ] UI v3: หน้าแจ้งเตือน (อ่าน `alerts`) + เคลียร์ alert
-- [ ] แจ้งเตือนเข้า LINE (Supabase Edge Function → LINE Messaging API)
+- [ ] UI v2: กราฟย้อนหลัง (อุณหภูมิ/ความชื้น 24 ชม. / 7 วัน) จาก `sensor_readings` (read-only)
+- [ ] UI v3: หน้าแจ้งเตือน (อ่าน `alerts`) (read-only; "เคลียร์ alert" เขียน resolved_at ต้องมี Auth ก่อน — เลื่อนไปหลัง Auth)
 - [ ] Auth: ปิดไม่ให้คนนอกกดสั่งอุปกรณ์ (Supabase Auth + RLS)
+- [ ] UI v2: หน้า Settings (แก้ setpoint จาก Supabase `control_config`) + validate ช่วงค่า — **หลัง Auth** (ห้าม anon เขียน setpoint เด็ดขาด: คุมฮีทเตอร์/ปั๊มโดยตรง)
+- [ ] แจ้งเตือนเข้า LINE (Supabase Edge Function → LINE Messaging API)
 - [ ] PWA: เพิ่มลงหน้าจอมือถือ
 - [ ] retention/rollup `sensor_readings` (ข้อมูลจะโตเร็ว)
 - [ ] ทดสอบกับบอร์ด ESP32 จริง + เอกสารติดตั้งหน้างาน
