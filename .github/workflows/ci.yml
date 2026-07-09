@@ -39,3 +39,4 @@ jobs:
         with: { python-version: '3.12' }
       - run: pip install platformio
       - run: pio run -d firmware/esp32-controller
+      - run: pio test -e native -d firmware/esp32-controller   # interlock unit tests (host)

@@ -77,8 +77,18 @@ static void persist_events(const ActuatorState &cur) {
   prev_act = cur;
 }
 
+// เตือนตอน boot ถ้า secrets.h ยังเป็นค่า placeholder — จะต่อ WiFi/Supabase ไม่ได้ (persist ขึ้น Supabase ไม่ได้)
+static void warn_if_changeme() {
+  if (strstr(SECRET_SUPABASE_URL, "CHANGEME") || strstr(SECRET_SUPABASE_SERVICE_KEY, "CHANGEME") ||
+      strcmp(SECRET_WIFI_SSID, "CHANGEME") == 0) {
+    Serial.println("[WARN] secrets.h ยังเป็นค่า CHANGEME — ต่อ WiFi/Supabase ไม่ได้ และ persist ขึ้น Supabase ไม่ได้");
+    Serial.println("[WARN] cp src/secrets.h.example -> src/secrets.h แล้วเติมค่าจริงก่อนใช้งานหน้างาน (control loop + safety ยังทำงาน edge ได้)");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
+  warn_if_changeme();
   pinMode(FLOAT_PIN, INPUT);
   relays_begin();          // OFF ทั้งหมด (fail-safe)
   rs485_begin();
@@ -126,6 +136,9 @@ void loop() {
   if (now - t_ctrl >= CONTROL_PERIOD_MS) {
     t_ctrl = now;
     SensorSnapshot s; read_sensors(s);
+    // อัปเดตแคช interlock ก่อน safety เสมอ — ถ้ารอบนี้ trip control_step จะไม่ถูกเรียก แต่ manual command
+    // ที่เข้ามาระหว่างรอบต้องเห็นค่าน้ำ/กอง/อากาศล่าสุด (คำสั่งคนไม่ชนะ safety 100%)
+    control_cache_snapshot(s);
     char alert[24];
     bool trip = safety_check(s, control_get_setpoints(), alert, sizeof(alert));
     if (trip) {

@@ -7,6 +7,10 @@ Mode control_mode();
 // เรียกทุก CONTROL_PERIOD_MS หลังผ่าน safety แล้ว
 void control_step(const SensorSnapshot &s);
 
+// อัปเดตแคช snapshot (air/น้ำ/กอง) สำหรับเช็ค interlock ตอนสั่ง manual — main เรียกทุกรอบ "ก่อน"
+// safety_check เพื่อให้ cache สดแม้รอบนั้น trip (control_step ไม่ถูกเรียก) ปิดช่อง manual ชนะ safety
+void control_cache_snapshot(const SensorSnapshot &s);
+
 // ---- cmd/config: อัปเดต setpoint ทีละคีย์ (ชื่อคีย์ตาม docs/03-control-logic.md) ----
 // คืน true ถ้ารู้จัก key (ค่าที่ไม่รู้จักจะถูกข้าม)
 bool control_set_setpoint(const char *key, float value);
