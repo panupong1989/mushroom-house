@@ -2,6 +2,7 @@
 // (LatestResponse/ConfigResponse/CommandResult ใน lib/types.ts) เพื่อให้ lib/derive.ts,
 // lib/interlock.ts และ component เดิมใช้ต่อได้ทันทีโดยไม่ต้องแก้
 import { supabase } from './supabaseClient';
+import { RANGE_MS, type AirHistory, type HistoryRange, type Point } from './history';
 import type {
   ActuatorKind,
   ActuatorStateRow,
@@ -12,6 +13,9 @@ import type {
   LatestResponse,
   SensorReadingRow,
 } from './types';
+
+// bucket_seconds ต่อช่วง — ให้ได้จำนวนจุดใกล้เคียง RANGE_BUCKETS (24h→30 นาที, 7d→3 ชม.)
+const RANGE_BUCKET_SEC: Record<HistoryRange, number> = { '24h': 1800, '7d': 10800 };
 
 interface SensorMeta {
   kind: string;
@@ -187,6 +191,27 @@ export function subscribeSupabaseLatest(
     cancelled = true;
     client.removeChannel(channel);
   };
+}
+
+// กราฟย้อนหลัง (read-only) — aggregate ฝั่ง DB ผ่าน RPC air_history (ดู supabase/migrations/002)
+export async function fetchSupabaseAirHistory(houseId: string, range: HistoryRange): Promise<AirHistory> {
+  if (!supabase) return { temp: [], rh: [] };
+  const sinceIso = new Date(Date.now() - RANGE_MS[range]).toISOString();
+  const { data, error } = await supabase.rpc('air_history', {
+    p_house_id: houseId,
+    p_since: sinceIso,
+    p_bucket_seconds: RANGE_BUCKET_SEC[range],
+  });
+  if (error || !data) return { temp: [], rh: [] };
+  const temp: Point[] = [];
+  const rh: Point[] = [];
+  for (const row of data as { bucket_ts: string; temp_max: number | null; rh_avg: number | null }[]) {
+    const t = new Date(row.bucket_ts).getTime();
+    if (Number.isNaN(t)) continue;
+    if (row.temp_max != null) temp.push({ t, v: row.temp_max });
+    if (row.rh_avg != null) rh.push({ t, v: row.rh_avg });
+  }
+  return { temp, rh };
 }
 
 export async function fetchSupabaseConfig(houseId: string, profile?: string): Promise<ConfigResponse> {

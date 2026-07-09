@@ -9,6 +9,7 @@ import { HumidityCard } from '@/components/HumidityCard';
 import { WaterLevelCard } from '@/components/WaterLevelCard';
 import { ModeToggle, type SystemMode } from '@/components/ModeToggle';
 import { ActuatorPanel } from '@/components/ActuatorPanel';
+import { HistorySection } from '@/components/HistorySection';
 import { ToastStack, type Toast } from '@/components/ToastStack';
 import { useConfig, useLatest, useNow } from '@/lib/hooks';
 import { deriveTelemetry } from '@/lib/derive';
@@ -114,6 +115,7 @@ export default function Page() {
       <HumidityCard rh={telemetry.airRhAvg} rhMin={setpoints.rh_min} rhMax={setpoints.rh_max} />
       <BedTempCard bed={telemetry.bed} bedDanger={setpoints.bed_danger} />
       <WaterLevelCard waterOk={telemetry.waterOk} />
+      <HistorySection houseId={houseId} />
 
       <ModeToggle mode={systemMode} onChange={setSystemMode} busy={clearingOverrides} safeHold={!!safeHold} />
       <ActuatorPanel telemetry={telemetry} setpoints={setpoints} locked={controlsLocked} houseId={houseId} />
