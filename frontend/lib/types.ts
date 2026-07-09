@@ -12,6 +12,10 @@ export type SensorLocation = 'head' | 'mid' | 'tail' | 'tank' | string;
 
 export interface SensorReadingRow {
   id: number;
+  // sensorId = PK ของเซนเซอร์ (ตาราง sensors.id) — identity ที่แท้จริง ไม่ null/ไม่ซ้ำ ใช้จัดกลุ่ม
+  // ค่าล่าสุดต่อเซนเซอร์ (ดู lib/derive.ts) แทน (kind, location) ที่ยุบรวมกันได้เมื่อ location ซ้ำ/null
+  // optional เพราะ path เก่า (backend REST /latest) ยังไม่ส่ง id มา — derive จะ fallback เป็น kind:location
+  sensorId?: number;
   kind: string; // 'air_th' | 'bed_temp' | 'water_level'
   location: SensorLocation | null;
   metric: string; // 'temp' | 'rh' | 'level'

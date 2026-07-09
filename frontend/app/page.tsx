@@ -13,7 +13,7 @@ import { ToastStack, type Toast } from '@/components/ToastStack';
 import { useConfig, useLatest, useNow } from '@/lib/hooks';
 import { deriveTelemetry } from '@/lib/derive';
 import { HOUSE_ID, sendActuatorCommand } from '@/lib/api';
-import { ACTUATOR_KINDS, FALLBACK_SETPOINTS, LOCATION_LABELS } from '@/lib/constants';
+import { ACTUATOR_KINDS, FALLBACK_SETPOINTS, sensorPointLabel } from '@/lib/constants';
 import { fmtNum } from '@/lib/format';
 
 const MODE_STORAGE_KEY = 'mushroom-house:system-mode';
@@ -102,10 +102,10 @@ export default function Page() {
         />
         <p className="mt-3 text-[11px] font-medium text-gray-400">อากาศ · แต่ละจุด</p>
         <div className="mt-1 grid grid-cols-3 gap-2 text-center">
-          {(['head', 'mid', 'tail'] as const).map((loc) => (
-            <div key={loc} className="rounded-xl2 bg-bg p-2">
-              <p className="text-[11px] text-gray-500">{LOCATION_LABELS[loc]}</p>
-              <p className="text-sm font-semibold text-gray-700">{fmtNum(telemetry.air[loc]?.temp ?? null)}°</p>
+          {telemetry.air.map((pt) => (
+            <div key={pt.sensorId ?? pt.location} className="rounded-xl2 bg-bg p-2">
+              <p className="text-[11px] text-gray-500">{sensorPointLabel(pt.location, pt.sensorId)}</p>
+              <p className="text-sm font-semibold text-gray-700">{fmtNum(pt.temp)}°</p>
             </div>
           ))}
         </div>

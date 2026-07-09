@@ -35,6 +35,14 @@ export const LOCATION_LABELS: Record<string, string> = {
   tank: 'ถังน้ำ',
 };
 
+// label ของจุดเซนเซอร์: ใช้ชื่อตำแหน่งถ้ารู้ ไม่งั้น fallback เป็น location ดิบ หรือ "เซนเซอร์ #id"
+// สำคัญ: เซนเซอร์ที่ location เป็น null ต้อง "แสดง" ด้วย label สำรอง ไม่ใช่ยุบหายไปเงียบๆ (ดู lib/derive.ts)
+export function sensorPointLabel(location: string | null, sensorId: number | null): string {
+  if (location && LOCATION_LABELS[location]) return LOCATION_LABELS[location];
+  if (location) return location;
+  return sensorId != null ? `เซนเซอร์ #${sensorId}` : 'เซนเซอร์';
+}
+
 export const MODE_LABELS: Record<FsmMode, string> = {
   BOOT: 'กำลังเริ่มระบบ',
   SELFTEST: 'ตรวจสอบระบบ',

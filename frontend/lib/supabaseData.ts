@@ -24,7 +24,9 @@ const READING_HISTORY_LIMIT = 200;
 const EVENT_HISTORY_LIMIT = 100;
 
 function upsertReading(map: Map<string, SensorReadingRow>, row: SensorReadingRow) {
-  const key = `${row.kind}:${row.location ?? ''}:${row.metric}`;
+  // dedupe ด้วย sensorId (PK จริง) ไม่ใช่ (kind, location) — เซนเซอร์ที่ location ซ้ำ/null จะได้ไม่ยุบ
+  // รวมกันจนค่าล่าสุดของคนละตัวทับกัน (ดู lib/derive.ts) fallback kind:location เผื่อ path ที่ไม่มี id
+  const key = `${row.sensorId ?? `${row.kind}:${row.location ?? ''}`}:${row.metric}`;
   const cur = map.get(key);
   if (!cur || new Date(row.ts).getTime() >= new Date(cur.ts).getTime()) map.set(key, row);
 }
@@ -77,7 +79,14 @@ export function subscribeSupabaseLatest(
       return;
     }
 
-    for (const s of sensorsRes.data ?? []) sensorMeta.set(s.id, { kind: s.kind, location: s.location });
+    for (const s of sensorsRes.data ?? []) {
+      sensorMeta.set(s.id, { kind: s.kind, location: s.location });
+      // location เป็น metadata สำหรับ label เท่านั้น (จัดกลุ่มด้วย sensor_id) — แต่ถ้า null = misconfig
+      // ใน DB: การ์ดจะโชว์ "เซนเซอร์ #id" แทนชื่อจุด ควรไปเซ็ต location ให้ครบ (ดู supabase/migrations)
+      if ((s.kind === 'air_th' || s.kind === 'bed_temp') && s.location == null) {
+        console.warn(`[supabase] sensor #${s.id} (${s.kind}) ไม่มี location ใน DB — misconfig, จะแสดง label สำรอง`);
+      }
+    }
     for (const a of actuatorsRes.data ?? []) actuatorMeta.set(a.id, a.kind as ActuatorKind);
     mode = (houseRes.data?.last_mode as FsmMode | null) ?? null;
     modeTs = houseRes.data?.last_mode_ts ?? null;
@@ -107,6 +116,7 @@ export function subscribeSupabaseLatest(
       if (!meta) continue;
       upsertReading(readings, {
         id: row.id,
+        sensorId: row.sensor_id,
         kind: meta.kind,
         location: meta.location,
         metric: row.metric,
@@ -136,6 +146,7 @@ export function subscribeSupabaseLatest(
         if (!meta) return; // เซนเซอร์ใหม่ที่เพิ่มหลัง init — v1 ยังไม่ re-fetch meta ระหว่างทาง
         upsertReading(readings, {
           id: row.id,
+          sensorId: row.sensor_id,
           kind: meta.kind,
           location: meta.location,
           metric: row.metric,
