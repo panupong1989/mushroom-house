@@ -4,8 +4,10 @@
 -- commands + control_config ได้ (additive ไม่แก้ 001/002)
 -- idempotent (drop policy if exists ก่อน create) — รันใน Supabase SQL editor ต่อจาก 001/002
 --
--- สร้าง user เอง: Supabase dashboard → Authentication → Users → Add user (ไม่เปิด public sign-up:
--- Authentication → Providers → Email → ปิด "Enable sign-ups")
+-- สร้าง user เอง: Authentication → Users → Add user
+-- กัน public sign-up: Authentication → Sign In / Providers → "Allow new users to sign up" = OFF
+--   ⚠️ เปิด "Email provider" ไว้เสมอ! อย่าปิดทั้งตัว (จะ login ไม่ได้ = error email_provider_disabled)
+--   ปิดแค่ "sign up" อย่างเดียว — login ของ user ที่สร้างไว้ยังทำงาน
 -- ============================================================================
 
 -- ---- 1) anon เขียน commands ไม่ได้อีกต่อไป (เดิม 001 ให้ anon insert ได้) → ปุ่มสั่งงานต้อง login ----
