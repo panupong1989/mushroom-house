@@ -15,8 +15,14 @@ import type {
   SensorReadingRow,
 } from './types';
 
-const LOCATIONS = ['head', 'mid', 'tail'] as const;
-type Location = (typeof LOCATIONS)[number];
+// ตรงกับสเปกโรงจริง (supabase/migrations/005_real_sensors.sql): air_th ในโรง 2 จุด (หัว/ท้าย),
+// bed_temp ในกอง 2 แถว x 3 ตำแหน่ง (หัว/กลาง/ท้าย) = 6 จุด, outside_temp นอกโรง 1 จุด
+const AIR_LOCATIONS = ['head', 'tail'] as const;
+type AirLocation = (typeof AIR_LOCATIONS)[number];
+
+const BED_ROWS = [1, 2] as const;
+const BED_LOCATIONS = ['head', 'mid', 'tail'] as const;
+type BedLocation = (typeof BED_LOCATIONS)[number];
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -43,10 +49,11 @@ function mockWaterOk(nowMs: number): boolean {
 
 interface MockSnapshot {
   ts: string;
-  airTemps: Record<Location, number>;
-  airRhs: Record<Location, number>;
-  bedTemps: Record<Location, number>;
-  airTempMax: number; // ค่าใช้คุม = max จาก 3 จุด (docs/03-control-logic.md), ตรงกับ lib/derive.ts airTempCtrl
+  airTemps: Record<AirLocation, number>;
+  airRhs: Record<AirLocation, number>;
+  bedTemps: Record<number, Record<BedLocation, number>>; // key = row_no (1|2)
+  outsideTemp: number;
+  airTempMax: number; // ค่าใช้คุม = max จากทุกจุดอากาศ (docs/03-control-logic.md), ตรงกับ lib/derive.ts airTempCtrl
   bedTempMax: number;
   waterOk: boolean;
   mist: boolean;
@@ -63,20 +70,30 @@ function buildSnapshot(nowMs: number): MockSnapshot {
   const airTempBase = 30 + day * 3 + wobble; // ~26-34
   const airRhBase = 86 - day * 4 + wobble * 2; // ~80-92, ชื้นขึ้นตอนกลางคืน
   const bedTempBase = 33 + day * 1.5 + wobble * 0.5; // กองเห็ดอุ่นกว่าอากาศเล็กน้อย
+  const outsideTempBase = 28 + day * 6 + wobble * 1.5; // นอกโรงแกว่งตามแดด/ลมมากกว่าในโรง
 
-  const airTemps = {} as Record<Location, number>;
-  const airRhs = {} as Record<Location, number>;
-  const bedTemps = {} as Record<Location, number>;
+  const airTemps = {} as Record<AirLocation, number>;
+  const airRhs = {} as Record<AirLocation, number>;
+  AIR_LOCATIONS.forEach((loc, i) => {
+    const offset = (i - 0.5) * 0.8; // head/tail อยู่คนละฝั่งโรง
+    airTemps[loc] = round1(clamp(airTempBase + offset, 26, 34));
+    airRhs[loc] = round1(clamp(airRhBase - offset * 3, 80, 92));
+  });
 
-  LOCATIONS.forEach((loc, i) => {
-    airTemps[loc] = round1(clamp(airTempBase + (i - 1) * 0.4, 26, 34));
-    airRhs[loc] = round1(clamp(airRhBase - (i - 1) * 1.2, 80, 92));
-    bedTemps[loc] = round1(bedTempBase + (i - 1) * 0.3);
+  const bedTemps = {} as Record<number, Record<BedLocation, number>>;
+  BED_ROWS.forEach((rowNo, r) => {
+    const rowOffset = (r - 0.5) * 0.6; // แถว 1/2 อุณหภูมิต่างกันเล็กน้อย
+    const perLoc = {} as Record<BedLocation, number>;
+    BED_LOCATIONS.forEach((loc, i) => {
+      perLoc[loc] = round1(bedTempBase + rowOffset + (i - 1) * 0.3);
+    });
+    bedTemps[rowNo] = perLoc;
   });
 
   const airTempMax = Math.max(...Object.values(airTemps));
-  const bedTempMax = Math.max(...Object.values(bedTemps));
-  const airRhAvg = Object.values(airRhs).reduce((a, b) => a + b, 0) / LOCATIONS.length;
+  const bedTempMax = Math.max(...BED_ROWS.flatMap((rowNo) => Object.values(bedTemps[rowNo])));
+  const airRhAvg = Object.values(airRhs).reduce((a, b) => a + b, 0) / AIR_LOCATIONS.length;
+  const outsideTemp = round1(clamp(outsideTempBase, 15, 42));
   const waterOk = mockWaterOk(nowMs);
 
   // สะท้อน INTERLOCK เหล็ก (CLAUDE.md/docs/03-control-logic.md): ห้าม mist ถ้า T_air<27.5 หรือน้ำต่ำ,
@@ -92,6 +109,7 @@ function buildSnapshot(nowMs: number): MockSnapshot {
     airTemps,
     airRhs,
     bedTemps,
+    outsideTemp,
     airTempMax,
     bedTempMax,
     waterOk,
@@ -109,18 +127,34 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
   let id = 1;
 
   // sensorId คงที่ต่อ "เซนเซอร์จริง" (ตรงกับ sensors.id ใน seed) — temp/rh ของจุดเดียวกันใช้ id เดียว
-  // ให้ lib/derive.ts จัดกลุ่มด้วย sensorId ได้เหมือน path Supabase จริง (ดู supabase/migrations/001_init.sql)
-  const airSensorId: Record<Location, number> = { head: 1, mid: 2, tail: 3 };
-  const bedSensorId: Record<Location, number> = { head: 4, mid: 5, tail: 6 };
+  // ให้ lib/derive.ts จัดกลุ่มด้วย sensorId ได้เหมือน path Supabase จริง (ดู supabase/migrations/005_real_sensors.sql)
+  const airSensorId: Record<AirLocation, number> = { head: 1, tail: 3 };
+  const bedSensorId: Record<number, Record<BedLocation, number>> = {
+    1: { head: 4, mid: 5, tail: 6 },
+    2: { head: 8, mid: 9, tail: 10 },
+  };
+  const outsideSensorId = 11;
   const waterSensorId = 7;
 
-  LOCATIONS.forEach((loc) => {
+  AIR_LOCATIONS.forEach((loc) => {
     sensors.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts: snap.ts });
     sensors.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts: snap.ts });
   });
-  LOCATIONS.forEach((loc) => {
-    sensors.push({ id: id++, sensorId: bedSensorId[loc], kind: 'bed_temp', location: loc, metric: 'temp', value: snap.bedTemps[loc], ts: snap.ts });
+  BED_ROWS.forEach((rowNo) => {
+    BED_LOCATIONS.forEach((loc) => {
+      sensors.push({
+        id: id++,
+        sensorId: bedSensorId[rowNo][loc],
+        kind: 'bed_temp',
+        location: loc,
+        rowNo,
+        metric: 'temp',
+        value: snap.bedTemps[rowNo][loc],
+        ts: snap.ts,
+      });
+    });
   });
+  sensors.push({ id: id++, sensorId: outsideSensorId, kind: 'outside_temp', location: 'outside', metric: 'temp', value: snap.outsideTemp, ts: snap.ts });
   sensors.push({ id: id++, sensorId: waterSensorId, kind: 'water_level', location: 'tank', metric: 'level', value: snap.waterOk ? 1 : 0, ts: snap.ts });
 
   const actuators: ActuatorStateRow[] = [
@@ -153,12 +187,12 @@ export function buildMockAlerts(nowMs: number = Date.now()): AlertRow[] {
 // คืน SensorReadingRow[] ให้ lib/history.ts bucketAirHistory ประมวลผลต่อ (เส้นทางเดียวกับข้อมูลจริง)
 export function buildMockAirHistory(sinceMs: number, nowMs: number, stepMs: number): SensorReadingRow[] {
   const rows: SensorReadingRow[] = [];
-  const airSensorId: Record<Location, number> = { head: 1, mid: 2, tail: 3 };
+  const airSensorId: Record<AirLocation, number> = { head: 1, tail: 3 };
   let id = 1;
   for (let t = sinceMs; t <= nowMs; t += stepMs) {
     const snap = buildSnapshot(t);
     const ts = new Date(t).toISOString();
-    LOCATIONS.forEach((loc) => {
+    AIR_LOCATIONS.forEach((loc) => {
       rows.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts });
       rows.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts });
     });

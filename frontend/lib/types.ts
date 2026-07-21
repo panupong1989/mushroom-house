@@ -16,8 +16,11 @@ export interface SensorReadingRow {
   // ค่าล่าสุดต่อเซนเซอร์ (ดู lib/derive.ts) แทน (kind, location) ที่ยุบรวมกันได้เมื่อ location ซ้ำ/null
   // optional เพราะ path เก่า (backend REST /latest) ยังไม่ส่ง id มา — derive จะ fallback เป็น kind:location
   sensorId?: number;
-  kind: string; // 'air_th' | 'bed_temp' | 'water_level'
+  kind: string; // 'air_th' | 'bed_temp' | 'water_level' | 'outside_temp'
   location: SensorLocation | null;
+  // แถวที่ 1/2 ของกอง (เฉพาะ bed_temp โรง 2 แถว, supabase/migrations/005_real_sensors.sql) — null/undefined
+  // สำหรับ kind อื่นหรือ path ที่ไม่มีข้อมูลนี้ (backend REST เก่า)
+  rowNo?: number | null;
   metric: string; // 'temp' | 'rh' | 'level'
   value: number;
   ts: string;

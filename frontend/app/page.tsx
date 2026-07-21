@@ -5,6 +5,8 @@ import { TempGauge } from '@/components/TempGauge';
 import { Card } from '@/components/Card';
 import { ConnectionBadge, ModeBadge } from '@/components/StatusBadges';
 import { BedTempCard } from '@/components/BedTempCard';
+import { InHouseCard } from '@/components/InHouseCard';
+import { OutsideTempCard } from '@/components/OutsideTempCard';
 import { HumidityCard } from '@/components/HumidityCard';
 import { WaterLevelCard } from '@/components/WaterLevelCard';
 import { ModeToggle, type SystemMode } from '@/components/ModeToggle';
@@ -13,13 +15,13 @@ import { HistorySection } from '@/components/HistorySection';
 import { AlertsSection } from '@/components/AlertsSection';
 import { LoginPanel } from '@/components/LoginPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { TabNav, type TabKey } from '@/components/TabNav';
 import { ToastStack, type Toast } from '@/components/ToastStack';
 import { useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
 import { SUPABASE_ENABLED } from '@/lib/supabaseClient';
 import { deriveTelemetry } from '@/lib/derive';
 import { HOUSE_ID, sendActuatorCommand } from '@/lib/api';
-import { ACTUATOR_KINDS, FALLBACK_SETPOINTS, sensorPointLabel } from '@/lib/constants';
-import { fmtNum } from '@/lib/format';
+import { ACTUATOR_KINDS, FALLBACK_SETPOINTS } from '@/lib/constants';
 
 const MODE_STORAGE_KEY = 'mushroom-house:system-mode';
 
@@ -36,6 +38,7 @@ export default function Page() {
   const [clearingOverrides, setClearingOverrides] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
+  const [tab, setTab] = useState<TabKey>('monitor');
 
   useEffect(() => {
     const saved = window.localStorage.getItem(MODE_STORAGE_KEY);
@@ -82,7 +85,7 @@ export default function Page() {
   const controlsLocked = systemMode === 'AUTO' || safeHold;
 
   return (
-    <main className="mx-auto flex max-w-md flex-col gap-4 p-4 pb-24">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 pb-24 sm:p-6">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-800">โรงเห็ดฟาง 01</h1>
@@ -100,42 +103,59 @@ export default function Page() {
         </div>
       )}
 
-      <Card title="🌡️ อุณหภูมิอากาศ (เซนเซอร์ RS485)">
-        <TempGauge
-          value={telemetry.airTempCtrl}
-          goldMin={setpoints.temp_fruit_min}
-          goldMax={setpoints.temp_fruit_max}
-          coldLimit={setpoints.temp_heater_on}
-          dangerHot={setpoints.temp_danger_hot}
-        />
-        <p className="mt-3 text-[11px] font-medium text-gray-400">อากาศ · แต่ละจุด</p>
-        <div className="mt-1 grid grid-cols-3 gap-2 text-center">
-          {telemetry.air.map((pt) => (
-            <div key={pt.sensorId ?? pt.location} className="rounded-xl2 bg-bg p-2">
-              <p className="text-[11px] text-gray-500">{sensorPointLabel(pt.location, pt.sensorId)}</p>
-              <p className="text-sm font-semibold text-gray-700">{fmtNum(pt.temp)}°</p>
+      <TabNav active={tab} onChange={setTab} />
+
+      {tab === 'monitor' && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="md:col-span-2 xl:col-span-1">
+            <Card title="🌡️ อุณหภูมิอากาศ (ใช้คุม)">
+              <TempGauge
+                value={telemetry.airTempCtrl}
+                goldMin={setpoints.temp_fruit_min}
+                goldMax={setpoints.temp_fruit_max}
+                coldLimit={setpoints.temp_heater_on}
+                dangerHot={setpoints.temp_danger_hot}
+              />
+            </Card>
+          </div>
+
+          <InHouseCard air={telemetry.air} />
+          <OutsideTempCard outside={telemetry.outside} />
+          <HumidityCard rh={telemetry.airRhAvg} rhMin={setpoints.rh_min} rhMax={setpoints.rh_max} />
+          <BedTempCard bed={telemetry.bed} bedDanger={setpoints.bed_danger} />
+          <WaterLevelCard waterOk={telemetry.waterOk} />
+
+          {canControl ? (
+            <>
+              <div className="md:col-span-2 xl:col-span-3">
+                <ModeToggle mode={systemMode} onChange={setSystemMode} busy={clearingOverrides} safeHold={!!safeHold} />
+              </div>
+              <div className="md:col-span-2 xl:col-span-3">
+                <ActuatorPanel telemetry={telemetry} setpoints={setpoints} locked={controlsLocked} houseId={houseId} />
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft md:col-span-2 xl:col-span-3">
+              🔒 เข้าสู่ระบบในแท็บ &ldquo;ตั้งค่า&rdquo; เพื่อปลดล็อกการสั่งงานอุปกรณ์
             </div>
-          ))}
+          )}
         </div>
-      </Card>
+      )}
 
-      <HumidityCard rh={telemetry.airRhAvg} rhMin={setpoints.rh_min} rhMax={setpoints.rh_max} />
-      <BedTempCard bed={telemetry.bed} bedDanger={setpoints.bed_danger} />
-      <WaterLevelCard waterOk={telemetry.waterOk} />
-      <HistorySection houseId={houseId} />
-      <AlertsSection houseId={houseId} />
+      {tab === 'history' && <HistorySection houseId={houseId} />}
 
-      {SUPABASE_ENABLED && <LoginPanel session={session} />}
+      {tab === 'alerts' && <AlertsSection houseId={houseId} />}
 
-      {canControl ? (
-        <>
-          <ModeToggle mode={systemMode} onChange={setSystemMode} busy={clearingOverrides} safeHold={!!safeHold} />
-          <ActuatorPanel telemetry={telemetry} setpoints={setpoints} locked={controlsLocked} houseId={houseId} />
-          <SettingsPanel houseId={houseId} />
-        </>
-      ) : (
-        <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
-          🔒 เข้าสู่ระบบด้านบนเพื่อปลดล็อกการสั่งงานอุปกรณ์
+      {tab === 'settings' && (
+        <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 md:items-start">
+          {SUPABASE_ENABLED && <LoginPanel session={session} />}
+          {canControl ? (
+            <SettingsPanel houseId={houseId} />
+          ) : (
+            <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
+              🔒 เข้าสู่ระบบด้านบนก่อนเพื่อแก้ setpoint
+            </div>
+          )}
         </div>
       )}
 

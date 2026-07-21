@@ -11,6 +11,12 @@ function airTemp(location: string | null, value: number, min: number, sensorId?:
 function airRh(location: string | null, value: number, min: number, sensorId?: number): SensorReadingRow {
   return { id: Math.round(Math.random() * 1e9), sensorId, kind: 'air_th', location, metric: 'rh', value, ts: at(min) };
 }
+function bedTemp(location: string | null, rowNo: number | null, value: number, min: number, sensorId?: number): SensorReadingRow {
+  return { id: Math.round(Math.random() * 1e9), sensorId, kind: 'bed_temp', location, rowNo, metric: 'temp', value, ts: at(min) };
+}
+function outsideTemp(value: number, min: number, sensorId?: number): SensorReadingRow {
+  return { id: Math.round(Math.random() * 1e9), sensorId, kind: 'outside_temp', location: 'outside', metric: 'temp', value, ts: at(min) };
+}
 
 function latest(sensors: SensorReadingRow[]): LatestResponse {
   return { sensors, actuators: [], mode: 'FRUITING', mode_ts: at(0) };
@@ -106,5 +112,54 @@ describe('deriveTelemetry — จัดกลุ่มด้วย sensor_id ไ
     expect(byId.get(2)?.location).toBe('mid');
     expect(byId.get(9)?.location).toBeNull();
     expect(t.airTempCtrl).toBe(33);
+  });
+});
+
+describe('deriveTelemetry — ในกอง 6 จุด จัดกลุ่มด้วย rowNo (supabase/migrations/005_real_sensors.sql)', () => {
+  it('เรียงตาม rowNo ก่อน แล้วค่อยตำแหน่ง (หัว/กลาง/ท้าย) ภายในแถว', () => {
+    const t = deriveTelemetry(
+      latest([
+        bedTemp('tail', 2, 34, 5, 6),
+        bedTemp('head', 1, 30, 5, 1),
+        bedTemp('head', 2, 35, 5, 4),
+        bedTemp('mid', 1, 31, 5, 2),
+        bedTemp('tail', 1, 32, 5, 3),
+        bedTemp('mid', 2, 33.5, 5, 5),
+      ]),
+      NOW
+    );
+    expect(t.bed.map((p) => `${p.rowNo}:${p.location}`)).toEqual([
+      '1:head',
+      '1:mid',
+      '1:tail',
+      '2:head',
+      '2:mid',
+      '2:tail',
+    ]);
+    expect(t.bedTempMax).toBe(35);
+  });
+
+  it('เซนเซอร์ legacy ที่ไม่มี rowNo (null) ไม่พัง — ยังโชว์และนับ max ได้ปกติ', () => {
+    const t = deriveTelemetry(latest([bedTemp('head', null, 40, 5, 1), bedTemp('mid', null, 30, 5, 2)]), NOW);
+    expect(t.bed).toHaveLength(2);
+    expect(t.bed.every((p) => p.rowNo === null)).toBe(true);
+    expect(t.bedTempMax).toBe(40);
+  });
+});
+
+describe('deriveTelemetry — นอกโรง (kind: outside_temp)', () => {
+  it('จับค่าล่าสุดของเซนเซอร์นอกโรงแยกจาก air/bed', () => {
+    const t = deriveTelemetry(
+      latest([outsideTemp(25, 2, 11), outsideTemp(27, 6, 11), airTemp('head', 31, 5, 1)]),
+      NOW
+    );
+    expect(t.outside).toHaveLength(1);
+    expect(t.outside[0].temp).toBe(27);
+    // ต้องไม่ปนกับ airTempCtrl (ใช้คุมเฉพาะ air_th ในโรง)
+    expect(t.airTempCtrl).toBe(31);
+  });
+
+  it('ไม่มีข้อมูลนอกโรง → array ว่าง', () => {
+    expect(deriveTelemetry(latest([airTemp('head', 30, 5, 1)]), NOW).outside).toEqual([]);
   });
 });
