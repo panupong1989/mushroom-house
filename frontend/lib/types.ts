@@ -53,6 +53,14 @@ export interface AlertRow {
   resolved_at: string | null; // null = ยังไม่หาย (เขียน resolved_at ต้องมี Auth — ดู roadmap)
 }
 
+// metadata ของเซนเซอร์ (ตาราง sensors) — ใช้ label/จัดกลุ่มเส้นกราฟย้อนหลัง (lib/history.ts)
+export interface SensorMetaRow {
+  id: number;
+  location: string | null;
+  rowNo: number | null; // เฉพาะ bed_temp โรง 2 แถว (supabase/migrations/005_real_sensors.sql)
+  tier: string | null; // 'top' | 'mid' | 'bottom' เฉพาะ bed_temp
+}
+
 export type CommandAction = 'on' | 'off' | 'auto';
 
 export interface CommandOkResult {

@@ -12,6 +12,7 @@ import type {
   ConfigResponse,
   FsmMode,
   LatestResponse,
+  SensorMetaRow,
   SensorReadingRow,
 } from './types';
 
@@ -23,6 +24,34 @@ type AirLocation = (typeof AIR_LOCATIONS)[number];
 const BED_ROWS = [1, 2] as const;
 const BED_LOCATIONS = ['head', 'mid', 'tail'] as const;
 type BedLocation = (typeof BED_LOCATIONS)[number];
+const BED_TIER: Record<BedLocation, string> = { head: 'top', mid: 'mid', tail: 'bottom' };
+
+// sensorId คงที่ต่อ "เซนเซอร์จริง" ให้ตรงกับ seed ของ supabase/migrations/005_real_sensors.sql —
+// ใช้ร่วมกันทั้ง buildMockLatest, buildMockAirHistory และ buildMockSensorReadings ด้านล่าง
+const AIR_SENSOR_ID: Record<AirLocation, number> = { head: 1, tail: 3 };
+const BED_SENSOR_ID: Record<number, Record<BedLocation, number>> = {
+  1: { head: 4, mid: 5, tail: 6 },
+  2: { head: 8, mid: 9, tail: 10 },
+};
+const OUTSIDE_SENSOR_ID = 11;
+const WATER_SENSOR_ID = 7;
+
+// metadata เซนเซอร์ (โหมด mock) — คู่กับ fetchSupabaseSensorMeta (ตาราง sensors จริง) ให้
+// component กราฟย้อนหลัง (lib/hooks.ts useSensorMeta) ใช้ path เดียวกันได้ทั้ง mock/Supabase
+export const MOCK_SENSOR_META: (SensorMetaRow & { kind: string })[] = [
+  { id: AIR_SENSOR_ID.head, kind: 'air_th', location: 'head', rowNo: null, tier: null },
+  { id: AIR_SENSOR_ID.tail, kind: 'air_th', location: 'tail', rowNo: null, tier: null },
+  ...BED_ROWS.flatMap((rowNo) =>
+    BED_LOCATIONS.map((loc) => ({
+      id: BED_SENSOR_ID[rowNo][loc],
+      kind: 'bed_temp',
+      location: loc,
+      rowNo,
+      tier: BED_TIER[loc],
+    }))
+  ),
+  { id: OUTSIDE_SENSOR_ID, kind: 'outside_temp', location: 'outside', rowNo: null, tier: null },
+];
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -128,23 +157,15 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
 
   // sensorId คงที่ต่อ "เซนเซอร์จริง" (ตรงกับ sensors.id ใน seed) — temp/rh ของจุดเดียวกันใช้ id เดียว
   // ให้ lib/derive.ts จัดกลุ่มด้วย sensorId ได้เหมือน path Supabase จริง (ดู supabase/migrations/005_real_sensors.sql)
-  const airSensorId: Record<AirLocation, number> = { head: 1, tail: 3 };
-  const bedSensorId: Record<number, Record<BedLocation, number>> = {
-    1: { head: 4, mid: 5, tail: 6 },
-    2: { head: 8, mid: 9, tail: 10 },
-  };
-  const outsideSensorId = 11;
-  const waterSensorId = 7;
-
   AIR_LOCATIONS.forEach((loc) => {
-    sensors.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts: snap.ts });
-    sensors.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts: snap.ts });
+    sensors.push({ id: id++, sensorId: AIR_SENSOR_ID[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts: snap.ts });
+    sensors.push({ id: id++, sensorId: AIR_SENSOR_ID[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts: snap.ts });
   });
   BED_ROWS.forEach((rowNo) => {
     BED_LOCATIONS.forEach((loc) => {
       sensors.push({
         id: id++,
-        sensorId: bedSensorId[rowNo][loc],
+        sensorId: BED_SENSOR_ID[rowNo][loc],
         kind: 'bed_temp',
         location: loc,
         rowNo,
@@ -154,8 +175,8 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
       });
     });
   });
-  sensors.push({ id: id++, sensorId: outsideSensorId, kind: 'outside_temp', location: 'outside', metric: 'temp', value: snap.outsideTemp, ts: snap.ts });
-  sensors.push({ id: id++, sensorId: waterSensorId, kind: 'water_level', location: 'tank', metric: 'level', value: snap.waterOk ? 1 : 0, ts: snap.ts });
+  sensors.push({ id: id++, sensorId: OUTSIDE_SENSOR_ID, kind: 'outside_temp', location: 'outside', metric: 'temp', value: snap.outsideTemp, ts: snap.ts });
+  sensors.push({ id: id++, sensorId: WATER_SENSOR_ID, kind: 'water_level', location: 'tank', metric: 'level', value: snap.waterOk ? 1 : 0, ts: snap.ts });
 
   const actuators: ActuatorStateRow[] = [
     { kind: 'mist', state: snap.mist, ts: snap.ts },
@@ -187,15 +208,50 @@ export function buildMockAlerts(nowMs: number = Date.now()): AlertRow[] {
 // คืน SensorReadingRow[] ให้ lib/history.ts bucketAirHistory ประมวลผลต่อ (เส้นทางเดียวกับข้อมูลจริง)
 export function buildMockAirHistory(sinceMs: number, nowMs: number, stepMs: number): SensorReadingRow[] {
   const rows: SensorReadingRow[] = [];
-  const airSensorId: Record<AirLocation, number> = { head: 1, tail: 3 };
   let id = 1;
   for (let t = sinceMs; t <= nowMs; t += stepMs) {
     const snap = buildSnapshot(t);
     const ts = new Date(t).toISOString();
     AIR_LOCATIONS.forEach((loc) => {
-      rows.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts });
-      rows.push({ id: id++, sensorId: airSensorId[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts });
+      rows.push({ id: id++, sensorId: AIR_SENSOR_ID[loc], kind: 'air_th', location: loc, metric: 'temp', value: snap.airTemps[loc], ts });
+      rows.push({ id: id++, sensorId: AIR_SENSOR_ID[loc], kind: 'air_th', location: loc, metric: 'rh', value: snap.airRhs[loc], ts });
     });
+  }
+  return rows;
+}
+
+// สร้าง readings ย้อนหลังของ kind ใดๆ (โหมด mock/dev) — ใช้กับกราฟย้อนหลังแบบต่อเซนเซอร์
+// (lib/history.ts bucketSensorReadings) ต่างจาก buildMockAirHistory ตรงที่ครอบคลุมทุก kind
+// (air_th/bed_temp/outside_temp) ให้ตรงกับ RPC sensor_history_range ของจริง
+export function buildMockSensorReadings(kind: string, sinceMs: number, nowMs: number, stepMs: number): SensorReadingRow[] {
+  const rows: SensorReadingRow[] = [];
+  let id = 1;
+  for (let t = sinceMs; t <= nowMs; t += stepMs) {
+    const snap = buildSnapshot(t);
+    const ts = new Date(t).toISOString();
+    if (kind === 'air_th') {
+      AIR_LOCATIONS.forEach((loc) => {
+        rows.push({ id: id++, sensorId: AIR_SENSOR_ID[loc], kind, location: loc, metric: 'temp', value: snap.airTemps[loc], ts });
+        rows.push({ id: id++, sensorId: AIR_SENSOR_ID[loc], kind, location: loc, metric: 'rh', value: snap.airRhs[loc], ts });
+      });
+    } else if (kind === 'bed_temp') {
+      BED_ROWS.forEach((rowNo) => {
+        BED_LOCATIONS.forEach((loc) => {
+          rows.push({
+            id: id++,
+            sensorId: BED_SENSOR_ID[rowNo][loc],
+            kind,
+            location: loc,
+            rowNo,
+            metric: 'temp',
+            value: snap.bedTemps[rowNo][loc],
+            ts,
+          });
+        });
+      });
+    } else if (kind === 'outside_temp') {
+      rows.push({ id: id++, sensorId: OUTSIDE_SENSOR_ID, kind, location: 'outside', metric: 'temp', value: snap.outsideTemp, ts });
+    }
   }
   return rows;
 }
