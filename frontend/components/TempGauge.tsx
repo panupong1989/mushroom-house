@@ -69,7 +69,7 @@ export function TempGauge({ value, goldMin, goldMax, coldLimit, dangerHot }: Tem
           °C · โซนทอง {goldMin}-{goldMax}°
         </text>
       </svg>
-      <p className="mt-1 text-xs text-gray-500">ค่าที่ใช้คุม = สูงสุดจาก 3 จุด (หัว/กลาง/ท้าย)</p>
+      <p className="mt-1 text-xs text-gray-500">ค่าที่ใช้คุม = สูงสุดจากทุกจุดวัดอากาศในโรง</p>
     </div>
   );
 }

@@ -23,6 +23,7 @@ const RANGE_BUCKET_SEC: Record<HistoryRange, number> = { '24h': 1800, '7d': 1080
 interface SensorMeta {
   kind: string;
   location: string | null;
+  rowNo: number | null;
 }
 
 // แถวล่าสุดพอสำหรับ dedupe ต่อ (kind, location, metric) ตอน initial load — เกินพอสำหรับ
@@ -76,7 +77,7 @@ export function subscribeSupabaseLatest(
 
   async function init() {
     const [sensorsRes, actuatorsRes, houseRes] = await Promise.all([
-      client.from('sensors').select('id,kind,location').eq('house_id', houseId),
+      client.from('sensors').select('id,kind,location,row_no').eq('house_id', houseId),
       client.from('actuators').select('id,kind').eq('house_id', houseId),
       client.from('houses').select('last_mode,last_mode_ts').eq('id', houseId).maybeSingle(),
     ]);
@@ -87,7 +88,7 @@ export function subscribeSupabaseLatest(
     }
 
     for (const s of sensorsRes.data ?? []) {
-      sensorMeta.set(s.id, { kind: s.kind, location: s.location });
+      sensorMeta.set(s.id, { kind: s.kind, location: s.location, rowNo: s.row_no ?? null });
       // location เป็น metadata สำหรับ label เท่านั้น (จัดกลุ่มด้วย sensor_id) — แต่ถ้า null = misconfig
       // ใน DB: การ์ดจะโชว์ "เซนเซอร์ #id" แทนชื่อจุด ควรไปเซ็ต location ให้ครบ (ดู supabase/migrations)
       if ((s.kind === 'air_th' || s.kind === 'bed_temp') && s.location == null) {
@@ -126,6 +127,7 @@ export function subscribeSupabaseLatest(
         sensorId: row.sensor_id,
         kind: meta.kind,
         location: meta.location,
+        rowNo: meta.rowNo,
         metric: row.metric,
         value: row.value,
         ts: row.ts,
@@ -156,6 +158,7 @@ export function subscribeSupabaseLatest(
           sensorId: row.sensor_id,
           kind: meta.kind,
           location: meta.location,
+          rowNo: meta.rowNo,
           metric: row.metric,
           value: row.value,
           ts: row.ts,

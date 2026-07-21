@@ -10,14 +10,16 @@ export interface SensorPoint {
   temp: number | null;
   rh: number | null; // เฉพาะ air_th
   ts: number | null;
+  rowNo: number | null; // แถวที่ 1/2 (เฉพาะ bed_temp โรง 2 แถว) — null = ไม่เกี่ยว/ไม่รู้
 }
 
 export interface DerivedTelemetry {
   air: SensorPoint[]; // เรียงตามลำดับจุด (head→mid→tail→อื่นๆ) สำหรับแสดงผลรายจุด
   airTempCtrl: number | null; // ค่าใช้คุม = max จากทุกเซนเซอร์อากาศ (docs/03-control-logic.md)
   airRhAvg: number | null;
-  bed: SensorPoint[];
+  bed: SensorPoint[]; // เรียงตาม rowNo ก่อน แล้วค่อยตำแหน่ง (หัว/กลาง/ท้าย) — ดู orderBedPoints
   bedTempMax: number | null;
+  outside: SensorPoint[]; // DS18B20 นอกโรง (kind: outside_temp) — ปกติมีจุดเดียว
   waterOk: boolean | null;
   actuators: Record<ActuatorKind, boolean | null>;
   lastUpdateMs: number | null;
@@ -28,6 +30,7 @@ export interface DerivedTelemetry {
 interface PointAcc {
   sensorId: number | null;
   location: string | null;
+  rowNo: number | null;
   temp: number | null;
   tempTs: number | null;
   rh: number | null;
@@ -49,7 +52,7 @@ function identityKey(row: SensorReadingRow): string {
 }
 
 function accToPoint(a: PointAcc): SensorPoint {
-  return { sensorId: a.sensorId, location: a.location, temp: a.temp, rh: a.rh, ts: a.tempTs ?? a.rhTs };
+  return { sensorId: a.sensorId, location: a.location, rowNo: a.rowNo, temp: a.temp, rh: a.rh, ts: a.tempTs ?? a.rhTs };
 }
 
 function orderPoints(a: SensorPoint, b: SensorPoint): number {
@@ -61,25 +64,40 @@ function orderPoints(a: SensorPoint, b: SensorPoint): number {
   return (a.sensorId ?? 0) - (b.sensorId ?? 0);
 }
 
+// ในกอง: จัดกลุ่มด้วยแถว (row_no) ก่อนเสมอ แล้วค่อยเรียงตามตำแหน่งในแถว (หัว/กลาง/ท้าย) — ให้ UI
+// จับกลุ่ม "แถวที่ 1 / แถวที่ 2" ได้ตรงๆ จากลำดับอาเรย์ (ดู components/BedTempCard.tsx)
+function orderBedPoints(a: SensorPoint, b: SensorPoint): number {
+  const ra = a.rowNo ?? 0;
+  const rb = b.rowNo ?? 0;
+  if (ra !== rb) return ra - rb;
+  return orderPoints(a, b);
+}
+
+function newAcc(row: SensorReadingRow): PointAcc {
+  return { sensorId: row.sensorId ?? null, location: row.location, rowNo: row.rowNo ?? null, temp: null, tempTs: null, rh: null, rhTs: null };
+}
+
 function upsertTemp(map: Map<string, PointAcc>, row: SensorReadingRow, ts: number | null) {
   const key = identityKey(row);
-  const cur = map.get(key) ?? { sensorId: row.sensorId ?? null, location: row.location, temp: null, tempTs: null, rh: null, rhTs: null };
+  const cur = map.get(key) ?? newAcc(row);
   if (cur.tempTs === null || (ts ?? 0) >= cur.tempTs) {
     cur.temp = row.value;
     cur.tempTs = ts;
   }
   cur.location = cur.location ?? row.location;
+  cur.rowNo = cur.rowNo ?? row.rowNo ?? null;
   map.set(key, cur);
 }
 
 function upsertRh(map: Map<string, PointAcc>, row: SensorReadingRow, ts: number | null) {
   const key = identityKey(row);
-  const cur = map.get(key) ?? { sensorId: row.sensorId ?? null, location: row.location, temp: null, tempTs: null, rh: null, rhTs: null };
+  const cur = map.get(key) ?? newAcc(row);
   if (cur.rhTs === null || (ts ?? 0) >= cur.rhTs) {
     cur.rh = row.value;
     cur.rhTs = ts;
   }
   cur.location = cur.location ?? row.location;
+  cur.rowNo = cur.rowNo ?? row.rowNo ?? null;
   map.set(key, cur);
 }
 
@@ -88,6 +106,7 @@ function upsertRh(map: Map<string, PointAcc>, row: SensorReadingRow, ts: number 
 export function deriveTelemetry(latest: LatestResponse | null, nowMs: number): DerivedTelemetry {
   const airBy = new Map<string, PointAcc>();
   const bedBy = new Map<string, PointAcc>();
+  const outsideBy = new Map<string, PointAcc>();
   let waterOk: number | null = null;
   let waterTs: number | null = null;
   let lastUpdateMs: number | null = toMs(latest?.mode_ts ?? null);
@@ -101,6 +120,8 @@ export function deriveTelemetry(latest: LatestResponse | null, nowMs: number): D
       else if (row.metric === 'rh') upsertRh(airBy, row, ts);
     } else if (row.kind === 'bed_temp') {
       if (row.metric === 'temp') upsertTemp(bedBy, row, ts);
+    } else if (row.kind === 'outside_temp') {
+      if (row.metric === 'temp') upsertTemp(outsideBy, row, ts);
     } else if (row.kind === 'water_level' && row.metric === 'level') {
       if (waterTs === null || (ts ?? 0) >= waterTs) {
         waterOk = row.value;
@@ -110,7 +131,8 @@ export function deriveTelemetry(latest: LatestResponse | null, nowMs: number): D
   }
 
   const air = Array.from(airBy.values()).map(accToPoint).sort(orderPoints);
-  const bed = Array.from(bedBy.values()).map(accToPoint).sort(orderPoints);
+  const bed = Array.from(bedBy.values()).map(accToPoint).sort(orderBedPoints);
+  const outside = Array.from(outsideBy.values()).map(accToPoint).sort(orderPoints);
 
   const airTemps = air.map((p) => p.temp).filter((v): v is number => v !== null);
   const airRhs = air.map((p) => p.rh).filter((v): v is number => v !== null);
@@ -130,6 +152,7 @@ export function deriveTelemetry(latest: LatestResponse | null, nowMs: number): D
     airRhAvg: airRhs.length ? airRhs.reduce((a, b) => a + b, 0) / airRhs.length : null,
     bed,
     bedTempMax: bedTemps.length ? Math.max(...bedTemps) : null,
+    outside,
     waterOk: waterOk === null ? null : waterOk === 1,
     actuators,
     lastUpdateMs,
