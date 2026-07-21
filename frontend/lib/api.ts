@@ -1,14 +1,34 @@
-import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse } from './types';
-import { buildMockAirHistory, buildMockAlerts, buildMockConfig, buildMockLatest, mockSendActuatorCommand } from './mock';
+import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, SensorMetaRow } from './types';
+import {
+  MOCK_SENSOR_META,
+  buildMockAirHistory,
+  buildMockAlerts,
+  buildMockConfig,
+  buildMockLatest,
+  buildMockSensorReadings,
+  mockSendActuatorCommand,
+} from './mock';
 import { SUPABASE_ENABLED } from './supabaseClient';
 import {
   fetchSupabaseAirHistory,
   fetchSupabaseAlerts,
   fetchSupabaseConfig,
+  fetchSupabaseSensorHistory,
+  fetchSupabaseSensorMeta,
   sendSupabaseCommand,
   updateSupabaseConfig,
 } from './supabaseData';
-import { RANGE_BUCKETS, RANGE_MS, bucketAirHistory, type AirHistory, type HistoryRange } from './history';
+import {
+  RANGE_BUCKETS,
+  RANGE_MS,
+  RANGE_META,
+  bucketAirHistory,
+  bucketSensorReadings,
+  type AirHistory,
+  type HistoryRange,
+  type RangeKey,
+  type SensorSeriesRow,
+} from './history';
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 export const HOUSE_ID = process.env.NEXT_PUBLIC_HOUSE_ID ?? 'house-01';
@@ -50,6 +70,30 @@ export function fetchAirHistory(houseId: string = HOUSE_ID, range: HistoryRange 
   const stepMs = RANGE_MS[range] / 240; // ~240 จุดดิบก่อน bucket ให้เส้นเนียน
   const rows = buildMockAirHistory(since, now, stepMs);
   return Promise.resolve(bucketAirHistory(rows, since, now, RANGE_BUCKETS[range]));
+}
+
+// metadata เซนเซอร์ต่อ kind (id/location/row_no/tier) — ให้กราฟย้อนหลังแบบต่อเซนเซอร์จัดกลุ่ม/ตั้งชื่อเส้น
+export function fetchSensorMeta(houseId: string, kind: string): Promise<SensorMetaRow[]> {
+  if (SUPABASE_ENABLED) return fetchSupabaseSensorMeta(houseId, kind);
+  return Promise.resolve(MOCK_SENSOR_META.filter((s) => s.kind === kind));
+}
+
+// กราฟย้อนหลังต่อเซนเซอร์ (read-only) — Supabase RPC sensor_history[_range] (supabase/migrations/005) > mock
+// endMs=null คือ "ล่าสุด/live" (ถึงตอนนี้), ระบุ endMs เมื่อผู้ใช้เลือกวันย้อนหลังจาก date picker
+export function fetchSensorHistory(
+  houseId: string,
+  kind: string,
+  range: RangeKey,
+  endMs: number | null = null
+): Promise<SensorSeriesRow[]> {
+  if (SUPABASE_ENABLED) return fetchSupabaseSensorHistory(houseId, kind, range, endMs);
+  const meta = RANGE_META[range];
+  const until = endMs ?? Date.now();
+  const since = until - meta.spanMs;
+  const stepMs = Math.max(15_000, meta.spanMs / 240); // ~240 จุดดิบก่อน bucket
+  const rows = buildMockSensorReadings(kind, since, until, stepMs);
+  const buckets = Math.min(300, Math.max(2, Math.round(meta.spanMs / (meta.bucketSeconds * 1000))));
+  return Promise.resolve(bucketSensorReadings(rows, since, until, buckets));
 }
 
 // การแจ้งเตือน (read-only): Supabase > mock. โหมด Supabase ใช้ subscribeSupabaseAlerts (realtime)

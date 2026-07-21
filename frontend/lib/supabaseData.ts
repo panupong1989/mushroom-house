@@ -2,7 +2,7 @@
 // (LatestResponse/ConfigResponse/CommandResult ใน lib/types.ts) เพื่อให้ lib/derive.ts,
 // lib/interlock.ts และ component เดิมใช้ต่อได้ทันทีโดยไม่ต้องแก้
 import { supabase } from './supabaseClient';
-import { RANGE_MS, type AirHistory, type HistoryRange, type Point } from './history';
+import { RANGE_MS, RANGE_META, type AirHistory, type HistoryRange, type Point, type RangeKey, type SensorSeriesRow } from './history';
 import type {
   ActuatorKind,
   ActuatorStateRow,
@@ -12,6 +12,7 @@ import type {
   ConfigResponse,
   FsmMode,
   LatestResponse,
+  SensorMetaRow,
   SensorReadingRow,
 } from './types';
 
@@ -220,6 +221,80 @@ export async function fetchSupabaseAirHistory(houseId: string, range: HistoryRan
     if (row.rh_avg != null) rh.push({ t, v: row.rh_avg });
   }
   return { temp, rh };
+}
+
+// metadata เซนเซอร์ต่อ kind (id/location/row_no/tier) — ใช้ label + จัดกลุ่มเส้นกราฟย้อนหลัง
+// (ตาราง sensors, supabase/migrations/005_real_sensors.sql) anon อ่านได้ตาม RLS เดิม
+export async function fetchSupabaseSensorMeta(houseId: string, kind: string): Promise<SensorMetaRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('sensors')
+    .select('id,location,row_no,tier')
+    .eq('house_id', houseId)
+    .eq('kind', kind);
+  if (error || !data) return [];
+  return data.map((row) => ({
+    id: row.id,
+    location: row.location,
+    rowNo: row.row_no ?? null,
+    tier: row.tier ?? null,
+  }));
+}
+
+interface RpcSensorHistoryRow {
+  bucket_ts: string;
+  sensor_id: number;
+  metric: string;
+  v_min: number;
+  v_max: number;
+  v_avg: number;
+}
+
+function mapSensorHistoryRows(data: RpcSensorHistoryRow[]): SensorSeriesRow[] {
+  return data
+    .map((row) => ({
+      bucketTs: new Date(row.bucket_ts).getTime(),
+      sensorId: row.sensor_id,
+      metric: row.metric,
+      vMin: row.v_min,
+      vMax: row.v_max,
+      vAvg: row.v_avg,
+    }))
+    .filter((r) => !Number.isNaN(r.bucketTs));
+}
+
+// กราฟย้อนหลังต่อเซนเซอร์ (read-only) — endMs=null ใช้ RPC sensor_history_range (อิง now() ฝั่ง DB,
+// สำหรับ "ล่าสุด/live"); endMs ระบุ = ผู้ใช้เลือกวันย้อนหลังจาก date picker เรียก sensor_history ตรงๆ
+// ด้วย since ที่คำนวณเอง แล้วกรอง bucket_ts <= endMs ฝั่ง client (RPC ไม่มีขอบบน)
+export async function fetchSupabaseSensorHistory(
+  houseId: string,
+  kind: string,
+  range: RangeKey,
+  endMs: number | null
+): Promise<SensorSeriesRow[]> {
+  if (!supabase) return [];
+  const meta = RANGE_META[range];
+
+  if (endMs == null) {
+    const { data, error } = await supabase.rpc('sensor_history_range', {
+      p_house_id: houseId,
+      p_kind: kind,
+      p_range: range,
+    });
+    if (error || !data) return [];
+    return mapSensorHistoryRows(data as RpcSensorHistoryRow[]);
+  }
+
+  const sinceIso = new Date(endMs - meta.spanMs).toISOString();
+  const { data, error } = await supabase.rpc('sensor_history', {
+    p_house_id: houseId,
+    p_kind: kind,
+    p_since: sinceIso,
+    p_bucket_seconds: meta.bucketSeconds,
+    p_use_rollup: meta.rollup,
+  });
+  if (error || !data) return [];
+  return mapSensorHistoryRows(data as RpcSensorHistoryRow[]).filter((r) => r.bucketTs <= endMs);
 }
 
 // การแจ้งเตือน (read-only) — anon SELECT ได้ตาม RLS

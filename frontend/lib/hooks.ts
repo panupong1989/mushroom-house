@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { fetchAlerts, fetchConfig, fetchLatest } from './api';
+import { fetchAlerts, fetchConfig, fetchLatest, fetchSensorHistory, fetchSensorMeta } from './api';
 import { SUPABASE_ENABLED, supabase } from './supabaseClient';
 import { subscribeSupabaseAlerts, subscribeSupabaseLatest } from './supabaseData';
 import { POLL_INTERVAL_MS } from './constants';
-import type { AlertRow, ConfigResponse, LatestResponse } from './types';
+import type { RangeKey, SensorSeriesRow } from './history';
+import type { AlertRow, ConfigResponse, LatestResponse, SensorMetaRow } from './types';
 
 export interface SessionState {
   session: Session | null;
@@ -130,6 +131,47 @@ export function useAlerts(houseId: string): AlertsState {
     };
   }, [houseId]);
 
+  return state;
+}
+
+// metadata เซนเซอร์ต่อ kind (id/location/row_no/tier) — เปลี่ยนไม่บ่อย โหลดครั้งเดียวตอน mount/เปลี่ยน kind
+export function useSensorMeta(houseId: string, kind: string): SensorMetaRow[] {
+  const [meta, setMeta] = useState<SensorMetaRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSensorMeta(houseId, kind).then((rows) => {
+      if (!cancelled) setMeta(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [houseId, kind]);
+  return meta;
+}
+
+export interface SensorHistoryState {
+  rows: SensorSeriesRow[];
+  loading: boolean;
+  error: boolean;
+}
+
+// กราฟย้อนหลังต่อเซนเซอร์ — โหลดใหม่ทุกครั้งที่ range/endMs (date picker) เปลี่ยน
+export function useSensorHistory(houseId: string, kind: string, range: RangeKey, endMs: number | null): SensorHistoryState {
+  const [state, setState] = useState<SensorHistoryState>({ rows: [], loading: true, error: false });
+  useEffect(() => {
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: false }));
+    fetchSensorHistory(houseId, kind, range, endMs)
+      .then((rows) => {
+        if (!cancelled) setState({ rows, loading: false, error: false });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ rows: [], loading: false, error: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [houseId, kind, range, endMs]);
   return state;
 }
 
