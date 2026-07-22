@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bucketAirHistory, seriesBounds } from './history';
+import {
+  LONG_RANGE_OPTIONS,
+  QUICK_RANGE_OPTIONS,
+  RANGE_OPTIONS,
+  bucketAirHistory,
+  rangeDescription,
+  seriesBounds,
+} from './history';
 import type { SensorReadingRow } from './types';
 
 const T0 = new Date('2026-07-09T00:00:00Z').getTime();
@@ -58,5 +65,35 @@ describe('seriesBounds', () => {
   });
   it('ไม่มีจุด → null', () => {
     expect(seriesBounds([])).toBeNull();
+  });
+});
+
+describe('QUICK_RANGE_OPTIONS / LONG_RANGE_OPTIONS', () => {
+  it('แบ่ง 2 กลุ่มครบทุกตัวเลือก ไม่ทับกัน (ดู issue #38)', () => {
+    expect(QUICK_RANGE_OPTIONS.map((o) => o.key)).toEqual(['1h', '4h', '12h', '24h']);
+    expect(LONG_RANGE_OPTIONS.map((o) => o.key)).toEqual(['week', 'month', 'year']);
+    expect(QUICK_RANGE_OPTIONS.length + LONG_RANGE_OPTIONS.length).toBe(RANGE_OPTIONS.length);
+  });
+});
+
+describe('rangeDescription', () => {
+  const T = new Date('2026-07-22T10:24:00').getTime();
+
+  it('ช่วงย้อนหลังจากตอนนี้ (quick) โชว์ label + เวลาเริ่ม-สิ้นสุด', () => {
+    const min = T - 24 * 60 * 60 * 1000;
+    expect(rangeDescription('24h', '', min, T)).toBe(
+      `ย้อนหลัง 24 ชม. (21 ก.ค. 10:24 – 22 ก.ค. 10:24)`
+    );
+  });
+
+  it('เลือกวัน → โชว์วันที่ทั้งวัน ไม่ผูกกับ label ของปุ่มช่วง', () => {
+    const startOfDay = new Date('2026-07-20T00:00:00').getTime();
+    const endOfDay = new Date('2026-07-20T23:59:59.999').getTime();
+    expect(rangeDescription('1h', '2026-07-20', startOfDay, endOfDay)).toBe('20 ก.ค. 2569 ทั้งวัน (00:00 – 23:59)');
+  });
+
+  it('ช่วงระยะยาว โชว์วันที่ (ไม่มีเวลา)', () => {
+    const min = T - 7 * 24 * 60 * 60 * 1000;
+    expect(rangeDescription('week', '', min, T)).toBe('ช่วง สัปดาห์ (15 ก.ค. 2569 – 22 ก.ค. 2569)');
   });
 });

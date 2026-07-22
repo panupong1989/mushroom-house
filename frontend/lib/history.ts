@@ -92,6 +92,12 @@ export const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: 'year', label: 'ปี' },
 ];
 
+// กลุ่มปุ่มเลือกช่วง (ดู issue #38) — "ย้อนหลังจากตอนนี้" (นับจากเวลาปัจจุบัน + date picker เลือกวัน)
+// vs "ระยะยาว" (สัปดาห์/เดือน/ปี) แยกกันชัดเจนกัน UI งง ว่าปุ่มไหนอยู่กลุ่มไหน
+const QUICK_KEYS: RangeKey[] = ['1h', '4h', '12h', '24h'];
+export const QUICK_RANGE_OPTIONS = RANGE_OPTIONS.filter((o) => QUICK_KEYS.includes(o.key));
+export const LONG_RANGE_OPTIONS = RANGE_OPTIONS.filter((o) => !QUICK_KEYS.includes(o.key));
+
 export interface RangeMeta {
   spanMs: number;
   bucketSeconds: number;
@@ -178,4 +184,30 @@ export function seriesToPoints(
 // สิ้นวันของวันที่เลือก (date picker, local time) — ใช้เป็นขอบบนของช่วงเวลาตอนผู้ใช้เลือกวันย้อนหลัง
 export function endOfDayMs(dateStr: string): number {
   return new Date(`${dateStr}T23:59:59.999`).getTime();
+}
+
+const THAI_MONTHS_SHORT = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+];
+
+function fmtDateTime(ms: number): string {
+  const d = new Date(ms);
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${hh}:${mm}`;
+}
+
+function fmtDateOnly(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getDate()} ${THAI_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
+
+// ข้อความบอกช่วงที่กำลังดูจริง ใต้ปุ่มเลือกช่วง (ดู issue #38) — เช่น
+// "ย้อนหลัง 24 ชม. (21 ก.ค. 10:24 – 22 ก.ค. 10:24)" หรือ "20 ก.ค. 2569 ทั้งวัน (00:00 – 23:59)"
+export function rangeDescription(range: RangeKey, dateStr: string, domainMin: number, domainMax: number): string {
+  if (dateStr) return `${fmtDateOnly(domainMin)} ทั้งวัน (00:00 – 23:59)`;
+  const label = RANGE_OPTIONS.find((o) => o.key === range)?.label ?? range;
+  if (QUICK_KEYS.includes(range)) return `ย้อนหลัง ${label} (${fmtDateTime(domainMin)} – ${fmtDateTime(domainMax)})`;
+  return `ช่วง ${label} (${fmtDateOnly(domainMin)} – ${fmtDateOnly(domainMax)})`;
 }
