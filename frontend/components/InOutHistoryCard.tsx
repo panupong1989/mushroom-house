@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card } from './Card';
 import { RangeControls } from './RangeControls';
 import { MultiLineChart, type ChartSeries } from './MultiLineChart';
-import { useNow, useSensorHistory, useSensorMeta } from '@/lib/hooks';
+import { useChartHeight, useNow, useSensorHistory, useSensorMeta } from '@/lib/hooks';
 import { RANGE_META, endOfDayMs, seriesToPoints, type RangeKey } from '@/lib/history';
 import { LOCATION_LABELS } from '@/lib/constants';
 import { MOCK_SENSOR_META, buildDemoSensorSeries } from '@/lib/mock';
@@ -21,6 +21,7 @@ export function InOutHistoryCard({ houseId, demoMode = false }: { houseId: strin
   const [range, setRange] = useState<RangeKey>('24h');
   const [dateStr, setDateStr] = useState('');
   const now = useNow();
+  const chartHeight = useChartHeight(); // เดสก์ท็อปสูง ~58vh, มือถือ 150px
 
   // เลือกวัน = แสดงทั้งวันนั้น 00:00–23:59 เสมอ ไม่ผูกกับ span ของปุ่มช่วงที่เคยเลือกไว้ (ดู issue #38)
   const effRange: RangeKey = dateStr ? '24h' : range;
@@ -83,7 +84,9 @@ export function InOutHistoryCard({ houseId, demoMode = false }: { houseId: strin
         domainMax={domainMax}
       />
       {loading ? (
-        <div className="flex h-[150px] items-center justify-center text-xs text-gray-400">กำลังโหลด…</div>
+        <div className="flex items-center justify-center text-xs text-gray-400" style={{ height: chartHeight }}>
+          กำลังโหลด…
+        </div>
       ) : error ? (
         <div className="rounded-xl2 bg-danger/10 p-3 text-xs text-danger">โหลดกราฟไม่สำเร็จ</div>
       ) : (
@@ -95,6 +98,7 @@ export function InOutHistoryCard({ houseId, demoMode = false }: { houseId: strin
           primaryDigits={1}
           secondaryUnit="%"
           secondaryDigits={0}
+          height={chartHeight}
         />
       )}
     </Card>

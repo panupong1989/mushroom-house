@@ -53,7 +53,10 @@ export function MultiLineChart({
 
   if (!hasData || !primaryBounds) {
     return (
-      <div className="flex h-[110px] items-center justify-center rounded-xl2 bg-bg text-xs text-gray-400">
+      <div
+        className="flex items-center justify-center rounded-xl2 bg-bg text-xs text-gray-400"
+        style={{ height: Math.max(110, height - 40) }}
+      >
         ยังไม่มีข้อมูล
       </div>
     );
@@ -96,32 +99,32 @@ export function MultiLineChart({
             );
           })}
         </svg>
-        <span className="pointer-events-none absolute left-1 top-0 text-[10px] font-medium text-gray-500">
+        <span className="pointer-events-none absolute left-1 top-0 text-[10px] font-medium text-gray-500 lg:text-xs">
           {fmtNum(primaryBounds.max, primaryDigits)}{primaryUnit}
         </span>
-        <span className="pointer-events-none absolute bottom-4 left-1 text-[10px] font-medium text-gray-400">
+        <span className="pointer-events-none absolute bottom-4 left-1 text-[10px] font-medium text-gray-400 lg:text-xs">
           {fmtNum(primaryBounds.min, primaryDigits)}{primaryUnit}
         </span>
         {secondaryBounds && secondaryUnit && (
           <>
-            <span className="pointer-events-none absolute right-1 top-0 text-[10px] font-medium text-sky-500">
+            <span className="pointer-events-none absolute right-1 top-0 text-[10px] font-medium text-sky-500 lg:text-xs">
               {fmtNum(secondaryBounds.max, secondaryDigits)}{secondaryUnit}
             </span>
-            <span className="pointer-events-none absolute bottom-4 right-1 text-[10px] font-medium text-sky-400">
+            <span className="pointer-events-none absolute bottom-4 right-1 text-[10px] font-medium text-sky-400 lg:text-xs">
               {fmtNum(secondaryBounds.min, secondaryDigits)}{secondaryUnit}
             </span>
           </>
         )}
-        <span className="pointer-events-none absolute bottom-0 left-1 text-[10px] text-gray-400">
+        <span className="pointer-events-none absolute bottom-0 left-1 text-[10px] text-gray-400 lg:text-xs">
           {fmtTime(domainMin, span)}
         </span>
-        <span className="pointer-events-none absolute bottom-0 right-1 text-[10px] text-gray-400">
+        <span className="pointer-events-none absolute bottom-0 right-1 text-[10px] text-gray-400 lg:text-xs">
           {fmtTime(domainMax, span)}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 lg:gap-x-5">
         {series.map((s) => (
-          <span key={s.key} className="flex items-center gap-1 text-[10px] text-gray-500">
+          <span key={s.key} className="flex items-center gap-1 text-[10px] text-gray-500 lg:text-xs">
             <span
               className="inline-block h-0 w-3 border-t-2"
               style={{ borderColor: s.color, borderStyle: s.dashed ? 'dashed' : 'solid' }}

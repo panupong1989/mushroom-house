@@ -85,7 +85,13 @@ export default function Page() {
   const controlsLocked = systemMode === 'AUTO' || safeHold;
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 pb-24 sm:p-6">
+    // แท็บกราฟบนเดสก์ท็อป (>=1024px) ใช้เต็มความกว้างจอ (เหลือ padding 24px จาก sm:p-6)
+    // แท็บอื่น + มือถือคง max-w-6xl เดิม
+    <main
+      className={`mx-auto flex w-full flex-col gap-4 p-4 pb-24 sm:p-6 ${
+        tab === 'history' ? 'max-w-6xl lg:max-w-none' : 'max-w-6xl'
+      }`}
+    >
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-800">โรงเห็ดฟาง 01</h1>

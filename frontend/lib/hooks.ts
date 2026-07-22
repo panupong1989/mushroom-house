@@ -41,6 +41,28 @@ export function useNow(intervalMs = 1000): number {
   return now ?? 0;
 }
 
+// ความสูงกราฟหน้าประวัติ (px): มือถือ/แท็บเล็ตคงเดิม 150, เดสก์ท็อป (>=1024px) สูง ~58vh
+// (clamp 320–680 กันจอเตี้ย/สูงผิดปกติ) — คืน 150 ตอน SSR/first paint กัน hydration mismatch
+// แล้วค่อยวัดจริงใน effect; อัปเดตตาม resize (รวมหมุนจอ/ย่อหน้าต่าง)
+export function useChartHeight(): number {
+  const [height, setHeight] = useState(150);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const update = () => {
+      setHeight(mq.matches ? Math.min(680, Math.max(320, Math.round(window.innerHeight * 0.58))) : 150);
+    };
+    update();
+    // ฟังทั้ง resize (ปรับขนาดหน้าต่าง) และ mq change (ข้าม breakpoint) — บางสภาพแวดล้อมยิงไม่ครบทั้งคู่
+    window.addEventListener('resize', update);
+    mq.addEventListener('change', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      mq.removeEventListener('change', update);
+    };
+  }, []);
+  return height;
+}
+
 export interface LatestState {
   data: LatestResponse | null;
   error: string | null;
