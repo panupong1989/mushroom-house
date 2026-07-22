@@ -3,6 +3,7 @@
 // ให้ค่าที่เห็นแกว่งสมจริง และ mirror กฎ interlock จาก backend/src/services/commandGuard.ts
 // เพื่อให้ปุ่มสั่งอุปกรณ์ได้ feedback ครบทุกแบบ (สำเร็จ / ถูกปฏิเสธ 409) แม้ไม่มี backend
 import { FALLBACK_SETPOINTS } from './constants';
+import { bucketSensorReadings, type SensorSeriesRow } from './history';
 import type {
   ActuatorKind,
   ActuatorStateRow,
@@ -254,6 +255,17 @@ export function buildMockSensorReadings(kind: string, sinceMs: number, nowMs: nu
     }
   }
   return rows;
+}
+
+// ข้อมูลตัวอย่างสำหรับปุ่ม "ดูตัวอย่างกราฟ" (ดู issue #38) — ใช้สูตร sine เดียวกับ buildSnapshot ข้างบน
+// สร้างในหน่วยความจำฝั่ง client ล้วนๆ (ไม่ผ่าน buildMockSensorReadings ปกติที่ผูกกับโหมด mock ของ
+// ทั้งแอป) เพื่อให้กดดู/ลบตัวอย่างได้อิสระ ไม่ต้องพึ่ง NEXT_PUBLIC_USE_MOCK — ไม่เขียนลง Supabase เด็ดขาด
+export function buildDemoSensorSeries(kind: string, sinceMs: number, untilMs: number): SensorSeriesRow[] {
+  const span = Math.max(1, untilMs - sinceMs);
+  const stepMs = Math.max(15_000, span / 240); // ~240 จุดดิบก่อน bucket ให้เส้นเนียน
+  const rows = buildMockSensorReadings(kind, sinceMs, untilMs, stepMs);
+  const buckets = Math.min(150, Math.max(2, Math.round(span / stepMs)));
+  return bucketSensorReadings(rows, sinceMs, untilMs, buckets);
 }
 
 function delay(ms: number): Promise<void> {
