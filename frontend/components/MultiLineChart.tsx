@@ -1,4 +1,4 @@
-import { seriesBounds, type Point } from '@/lib/history';
+import { seriesBounds, timeTicks, valueTicks, type Point } from '@/lib/history';
 import { fmtNum } from '@/lib/format';
 
 // กราฟเส้นหลายชุดแบบ inline SVG (ไม่พึ่ง library) — responsive ด้วย viewBox
@@ -71,6 +71,20 @@ export function MultiLineChart({
   const yPrimary = yFor(primaryBounds);
   const ySecondary = secondaryBounds ? yFor(secondaryBounds) : null;
 
+  // grid + ป้ายค่า/เวลา (ดู issue: กราฟสูงขึ้นแล้วมีแค่ min/max ที่มุม อ่านค่ากลางกราฟยาก)
+  // จำนวน tick ปรับตามความสูง (กราฟเดสก์ท็อป ~58vh ใส่ได้เยอะกว่ามือถือ 150px)
+  const tall = height >= 300;
+  const yTicks = valueTicks(primaryBounds.min, primaryBounds.max, tall ? 8 : 3);
+  const xTicks = timeTicks(domainMin, domainMax, tall ? 8 : 5);
+  // ป้ายเวลากลางกราฟ: ตัดตัวที่ชิดขอบ (ชนป้ายมุมซ้าย/ขวาเดิม) — มือถือแคบ ต้องเว้นขอบมากกว่า
+  const edgePct = tall ? 4 : 12;
+  // ค่าแกนรอง (%) ที่ระดับเดียวกับ gridline ของแกนหลัก — ให้ป้ายซ้าย/ขวาอยู่บนเส้นเดียวกัน
+  const secondaryAt = (y: number): number | null => {
+    if (!secondaryBounds) return null;
+    const frac = 1 - (y - PAD_T) / Math.max(1, height - PAD_T - PAD_B);
+    return secondaryBounds.min + frac * (secondaryBounds.max - secondaryBounds.min);
+  };
+
   function pathFor(pts: Point[], y: (v: number) => number): string | null {
     if (pts.length < 2) return null;
     return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
@@ -80,6 +94,31 @@ export function MultiLineChart({
     <div>
       <div className="relative">
         <svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img">
+          {/* grid วาดก่อนเส้นข้อมูล (อยู่ใต้เส้น) — non-scaling-stroke กันเส้นยืดตาม viewBox */}
+          {xTicks.map((t) => (
+            <line
+              key={`gx-${t}`}
+              x1={x(t)}
+              x2={x(t)}
+              y1={PAD_T}
+              y2={height - PAD_B}
+              stroke="#f3f4f6"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {yTicks.map((v) => (
+            <line
+              key={`gy-${v}`}
+              x1={0}
+              x2={W}
+              y1={yPrimary(v)}
+              y2={yPrimary(v)}
+              stroke="#e5e7eb"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
           {series.map((s) => {
             const y = s.axis === 'secondary' && ySecondary ? ySecondary : yPrimary;
             const d = pathFor(s.points, y);
@@ -99,22 +138,46 @@ export function MultiLineChart({
             );
           })}
         </svg>
-        <span className="pointer-events-none absolute left-1 top-0 text-[10px] font-medium text-gray-500 lg:text-xs">
-          {fmtNum(primaryBounds.max, primaryDigits)}{primaryUnit}
-        </span>
-        <span className="pointer-events-none absolute bottom-4 left-1 text-[10px] font-medium text-gray-400 lg:text-xs">
-          {fmtNum(primaryBounds.min, primaryDigits)}{primaryUnit}
-        </span>
-        {secondaryBounds && secondaryUnit && (
-          <>
-            <span className="pointer-events-none absolute right-1 top-0 text-[10px] font-medium text-sky-500 lg:text-xs">
-              {fmtNum(secondaryBounds.max, secondaryDigits)}{secondaryUnit}
+        {/* ป้ายค่าแกนหลัก (ซ้าย) ที่ทุก gridline — แทนป้าย min/max ที่มุมแบบเดิม
+            viewBox สูง = height px จริง เลยวางด้วย top:px ตรงๆ ได้ (แกน y ไม่ถูกยืด) */}
+        {yTicks.map((v) => (
+          <span
+            key={`ly-${v}`}
+            className="pointer-events-none absolute left-1 -translate-y-1/2 rounded bg-card/75 px-0.5 text-[10px] font-medium text-gray-400 lg:text-xs"
+            style={{ top: yPrimary(v) }}
+          >
+            {fmtNum(v, primaryDigits)}{primaryUnit}
+          </span>
+        ))}
+        {/* ป้ายแกนรอง (ขวา, %) ระดับเดียวกับ gridline — ค่า interpolate จากสเกลรอง */}
+        {secondaryBounds && secondaryUnit &&
+          yTicks.map((v) => {
+            const sv = secondaryAt(yPrimary(v));
+            if (sv == null) return null;
+            return (
+              <span
+                key={`ls-${v}`}
+                className="pointer-events-none absolute right-1 -translate-y-1/2 rounded bg-card/75 px-0.5 text-[10px] font-medium text-sky-400 lg:text-xs"
+                style={{ top: yPrimary(v) }}
+              >
+                {fmtNum(sv, secondaryDigits)}{secondaryUnit}
+              </span>
+            );
+          })}
+        {/* ป้ายเวลากลางกราฟ (แกน x ถูกยืดตามความกว้าง เลยวางด้วย % + translateX(-50%)) */}
+        {xTicks.map((t) => {
+          const pct = ((t - domainMin) / span) * 100;
+          if (pct < edgePct || pct > 100 - edgePct) return null; // กันชนป้ายมุม
+          return (
+            <span
+              key={`lt-${t}`}
+              className="pointer-events-none absolute bottom-0 -translate-x-1/2 text-[10px] text-gray-400 lg:text-xs"
+              style={{ left: `${pct}%` }}
+            >
+              {fmtTime(t, span)}
             </span>
-            <span className="pointer-events-none absolute bottom-4 right-1 text-[10px] font-medium text-sky-400 lg:text-xs">
-              {fmtNum(secondaryBounds.min, secondaryDigits)}{secondaryUnit}
-            </span>
-          </>
-        )}
+          );
+        })}
         <span className="pointer-events-none absolute bottom-0 left-1 text-[10px] text-gray-400 lg:text-xs">
           {fmtTime(domainMin, span)}
         </span>

@@ -6,6 +6,8 @@ import {
   bucketAirHistory,
   rangeDescription,
   seriesBounds,
+  timeTicks,
+  valueTicks,
 } from './history';
 import type { SensorReadingRow } from './types';
 
@@ -73,6 +75,85 @@ describe('QUICK_RANGE_OPTIONS / LONG_RANGE_OPTIONS', () => {
     expect(QUICK_RANGE_OPTIONS.map((o) => o.key)).toEqual(['1h', '4h', '12h', '24h']);
     expect(LONG_RANGE_OPTIONS.map((o) => o.key)).toEqual(['week', 'month', 'year']);
     expect(QUICK_RANGE_OPTIONS.length + LONG_RANGE_OPTIONS.length).toBe(RANGE_OPTIONS.length);
+  });
+});
+
+describe('valueTicks', () => {
+  it('เลือก step เลขสวย (1/2/5×10^k) ครอบคลุมช่วง', () => {
+    // ช่วงอุณหภูมิทั่วไป 30.6–34.1 → step 0.5
+    expect(valueTicks(30.6, 34.1, 8)).toEqual([31, 31.5, 32, 32.5, 33, 33.5, 34]);
+    // ช่วงกว้าง 20.3–36.0 → step 2
+    expect(valueTicks(20.3, 36.0, 8)).toEqual([22, 24, 26, 28, 30, 32, 34, 36]);
+  });
+
+  it('target น้อย (มือถือ) → tick ห่างขึ้น', () => {
+    expect(valueTicks(20.3, 36.0, 3)).toEqual([25, 30, 35]);
+  });
+
+  it('tick อยู่ใน [min, max] เสมอ ไม่ทะลุขอบ', () => {
+    for (const t of valueTicks(78, 94, 5)) {
+      expect(t).toBeGreaterThanOrEqual(78);
+      expect(t).toBeLessThanOrEqual(94);
+    }
+  });
+
+  it('ช่วงเสีย (span<=0 หรือ ±Infinity) → คืน []', () => {
+    expect(valueTicks(30, 30)).toEqual([]);
+    expect(valueTicks(35, 30)).toEqual([]);
+    expect(valueTicks(-Infinity, Infinity)).toEqual([]);
+  });
+
+  it('ไม่มี floating error สะสม (เช่น 32.500000000004)', () => {
+    for (const t of valueTicks(0.1, 1.9, 8)) {
+      expect(String(t).length).toBeLessThanOrEqual(4); // 0.2, 0.4, ... 1.8
+    }
+  });
+});
+
+describe('timeTicks', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+  // 10:24 เวลาท้องถิ่น (สตริงไม่มี Z = local) — ผล tick ต้องลงตัวตามนาฬิกาท้องถิ่น
+  const END = new Date('2026-07-22T10:24:00').getTime();
+
+  it('ช่วง 24 ชม. target 8 → step 3 ชม. ลงตัวตามเวลาท้องถิ่น', () => {
+    const ticks = timeTicks(END - 24 * HOUR_MS, END, 8);
+    expect(ticks).toHaveLength(8);
+    for (const t of ticks) {
+      const d = new Date(t);
+      expect(d.getHours() % 3).toBe(0); // 12:00, 15:00, ..., 09:00
+      expect(d.getMinutes()).toBe(0);
+    }
+  });
+
+  it('ช่วง 1 ชม. target 5 → step 15 นาที', () => {
+    const ticks = timeTicks(END - HOUR_MS, END, 5);
+    expect(ticks).toHaveLength(4);
+    for (const t of ticks) expect(new Date(t).getMinutes() % 15).toBe(0);
+  });
+
+  it('ช่วง 7 วัน target 8 → step 1 วัน ที่เที่ยงคืนท้องถิ่น', () => {
+    const ticks = timeTicks(END - 7 * 24 * HOUR_MS, END, 8);
+    expect(ticks).toHaveLength(7);
+    for (const t of ticks) {
+      const d = new Date(t);
+      expect(d.getHours()).toBe(0);
+      expect(d.getMinutes()).toBe(0);
+    }
+  });
+
+  it('tick อยู่ใน [min, max] เสมอ', () => {
+    for (const target of [3, 5, 8]) {
+      const min = END - 30 * 24 * HOUR_MS;
+      for (const t of timeTicks(min, END, target)) {
+        expect(t).toBeGreaterThanOrEqual(min);
+        expect(t).toBeLessThanOrEqual(END);
+      }
+    }
+  });
+
+  it('ช่วงเสีย → คืน []', () => {
+    expect(timeTicks(END, END)).toEqual([]);
+    expect(timeTicks(END, END - HOUR_MS)).toEqual([]);
   });
 });
 

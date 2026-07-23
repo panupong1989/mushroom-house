@@ -186,6 +186,50 @@ export function endOfDayMs(dateStr: string): number {
   return new Date(`${dateStr}T23:59:59.999`).getTime();
 }
 
+// ============================================================================
+// ตำแหน่ง tick สำหรับ grid + ป้ายค่าบนกราฟ (ดู MultiLineChart) — pure function เพื่อให้เขียน test ได้
+// ============================================================================
+
+// tick แกน y แบบเลขสวย (step 1/2/5 × 10^k) ภายใน [min, max] — target = จำนวนช่องโดยประมาณ
+// (จำนวน tick จริงอาจมากกว่า/น้อยกว่าเล็กน้อย ขึ้นกับว่า step สวยตัวไหนใกล้สุด)
+export function valueTicks(min: number, max: number, target = 4): number[] {
+  const span = max - min;
+  if (!(span > 0) || !Number.isFinite(span)) return [];
+  const raw = span / Math.max(1, target);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const f = raw / mag;
+  const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+  const out: number[] = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + step * 1e-6; v += step) {
+    out.push(Number(v.toFixed(6))); // ตัด floating error (เช่น 32.500000000004)
+  }
+  return out;
+}
+
+const TICK_MINUTE = 60 * 1000;
+const TICK_HOUR = 60 * TICK_MINUTE;
+const TICK_DAY = 24 * TICK_HOUR;
+// step เวลาที่เลือกได้ เรียงละเอียด → หยาบ (เลือกตัวแรกที่จำนวน tick ไม่เกิน target)
+const TIME_TICK_STEPS = [
+  5 * TICK_MINUTE, 10 * TICK_MINUTE, 15 * TICK_MINUTE, 30 * TICK_MINUTE,
+  TICK_HOUR, 2 * TICK_HOUR, 3 * TICK_HOUR, 6 * TICK_HOUR, 12 * TICK_HOUR,
+  TICK_DAY, 2 * TICK_DAY, 4 * TICK_DAY, 7 * TICK_DAY, 14 * TICK_DAY, 30 * TICK_DAY, 60 * TICK_DAY, 90 * TICK_DAY,
+];
+
+// tick แกนเวลาใน [minMs, maxMs] จัดแนวตามเวลาท้องถิ่น (เช่น step 6 ชม. → 00:00/06:00/12:00/18:00)
+// ไทยไม่มี DST เลยเลื่อนด้วย timezone offset คงที่ได้ · step ระดับหลายวัน (30/60/90 วัน) จัดแนวจาก
+// epoch → วันที่เริ่มไม่ตายตัวแต่ระยะห่างสม่ำเสมอ (ป้ายโชว์วันที่กำกับอยู่แล้ว ไม่ทำให้เข้าใจผิด)
+export function timeTicks(minMs: number, maxMs: number, target = 5): number[] {
+  const span = maxMs - minMs;
+  if (!(span > 0) || !Number.isFinite(span)) return [];
+  const step = TIME_TICK_STEPS.find((s) => span / s <= target) ?? TIME_TICK_STEPS[TIME_TICK_STEPS.length - 1];
+  const tzOffsetMs = new Date(minMs).getTimezoneOffset() * TICK_MINUTE;
+  const first = Math.ceil((minMs - tzOffsetMs) / step) * step + tzOffsetMs;
+  const out: number[] = [];
+  for (let t = first; t <= maxMs; t += step) out.push(t);
+  return out;
+}
+
 const THAI_MONTHS_SHORT = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
