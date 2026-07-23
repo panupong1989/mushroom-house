@@ -78,7 +78,7 @@ export function MultiLineChart({
   const xTicks = timeTicks(domainMin, domainMax, tall ? 8 : 5);
   // ป้ายเวลากลางกราฟ: ตัดตัวที่ชิดขอบ (ชนป้ายมุมซ้าย/ขวาเดิม) — มือถือแคบ ต้องเว้นขอบมากกว่า
   const edgePct = tall ? 4 : 12;
-  // ค่าแกนรอง (%) ที่ระดับเดียวกับ gridline ของแกนหลัก — ให้ป้ายซ้าย/ขวาอยู่บนเส้นเดียวกัน
+  // ค่าแกนรอง (%) ที่ระดับเดียวกับ gridline ของแกนหลัก — โชว์ใต้ป้าย °C ใน gutter ซ้ายคู่กัน
   const secondaryAt = (y: number): number | null => {
     if (!secondaryBounds) return null;
     const frac = 1 - (y - PAD_T) / Math.max(1, height - PAD_T - PAD_B);
@@ -90,100 +90,103 @@ export function MultiLineChart({
     return pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
   }
 
+  // gutter ซ้าย = พื้นที่จริงนอกกราฟสำหรับป้ายค่า (ไม่ overlay ทับกราฟ → เส้นไม่มีทางทับตัวเลข)
+  // % ความชื้น (แกนรอง) ก็อยู่ซ้ายใต้ °C ที่ gridline เดียวกัน อ่านคู่กันง่าย (feedback Beer 23 ก.ค.)
+  const gutterW = tall ? 56 : 46;
+
   return (
     <div>
-      <div className="relative">
-        <svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img">
-          {/* grid วาดก่อนเส้นข้อมูล (อยู่ใต้เส้น) — non-scaling-stroke กันเส้นยืดตาม viewBox */}
-          {xTicks.map((t) => (
-            <line
-              key={`gx-${t}`}
-              x1={x(t)}
-              x2={x(t)}
-              y1={PAD_T}
-              y2={height - PAD_B}
-              stroke="#f3f4f6"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          {yTicks.map((v) => (
-            <line
-              key={`gy-${v}`}
-              x1={0}
-              x2={W}
-              y1={yPrimary(v)}
-              y2={yPrimary(v)}
-              stroke="#e5e7eb"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          {series.map((s) => {
-            const y = s.axis === 'secondary' && ySecondary ? ySecondary : yPrimary;
-            const d = pathFor(s.points, y);
-            if (!d) return null;
-            return (
-              <path
-                key={s.key}
-                d={d}
-                fill="none"
-                stroke={s.color}
-                strokeWidth={1.5}
-                vectorEffect="non-scaling-stroke"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                strokeDasharray={s.dashed ? '4 3' : undefined}
-              />
-            );
-          })}
-        </svg>
-        {/* ป้ายค่าแกนหลัก (ซ้าย) ที่ทุก gridline — แทนป้าย min/max ที่มุมแบบเดิม
-            viewBox สูง = height px จริง เลยวางด้วย top:px ตรงๆ ได้ (แกน y ไม่ถูกยืด) */}
-        {yTicks.map((v) => (
-          <span
-            key={`ly-${v}`}
-            className="pointer-events-none absolute left-1 -translate-y-1/2 rounded bg-card/75 px-0.5 text-[10px] font-medium text-gray-400 lg:text-xs"
-            style={{ top: yPrimary(v) }}
-          >
-            {fmtNum(v, primaryDigits)}{primaryUnit}
-          </span>
-        ))}
-        {/* ป้ายแกนรอง (ขวา, %) ระดับเดียวกับ gridline — ค่า interpolate จากสเกลรอง */}
-        {secondaryBounds && secondaryUnit &&
-          yTicks.map((v) => {
-            const sv = secondaryAt(yPrimary(v));
-            if (sv == null) return null;
+      <div className="flex">
+        <div className="relative shrink-0" style={{ width: gutterW, height }}>
+          {/* viewBox สูง = height px จริง เลยวางป้ายด้วย top:px ตรงๆ ได้ (แกน y ไม่ถูกยืด)
+              คู่ป้าย °C/% กึ่งกลางที่ gridline — °C อยู่เหนือเส้น, % อยู่ใต้เส้น */}
+          {yTicks.map((v) => {
+            const sv = secondaryUnit ? secondaryAt(yPrimary(v)) : null;
             return (
               <span
-                key={`ls-${v}`}
-                className="pointer-events-none absolute right-1 -translate-y-1/2 rounded bg-card/75 px-0.5 text-[10px] font-medium text-sky-400 lg:text-xs"
+                key={`ly-${v}`}
+                className="pointer-events-none absolute right-1 flex -translate-y-1/2 flex-col items-end leading-tight"
                 style={{ top: yPrimary(v) }}
               >
-                {fmtNum(sv, secondaryDigits)}{secondaryUnit}
+                <span className="text-[10px] font-medium text-gray-400 lg:text-xs">
+                  {fmtNum(v, primaryDigits)}{primaryUnit}
+                </span>
+                {sv != null && (
+                  <span className="text-[10px] font-medium text-sky-400 lg:text-xs">
+                    {fmtNum(sv, secondaryDigits)}{secondaryUnit}
+                  </span>
+                )}
               </span>
             );
           })}
-        {/* ป้ายเวลากลางกราฟ (แกน x ถูกยืดตามความกว้าง เลยวางด้วย % + translateX(-50%)) */}
-        {xTicks.map((t) => {
-          const pct = ((t - domainMin) / span) * 100;
-          if (pct < edgePct || pct > 100 - edgePct) return null; // กันชนป้ายมุม
-          return (
-            <span
-              key={`lt-${t}`}
-              className="pointer-events-none absolute bottom-0 -translate-x-1/2 text-[10px] text-gray-400 lg:text-xs"
-              style={{ left: `${pct}%` }}
-            >
-              {fmtTime(t, span)}
-            </span>
-          );
-        })}
-        <span className="pointer-events-none absolute bottom-0 left-1 text-[10px] text-gray-400 lg:text-xs">
-          {fmtTime(domainMin, span)}
-        </span>
-        <span className="pointer-events-none absolute bottom-0 right-1 text-[10px] text-gray-400 lg:text-xs">
-          {fmtTime(domainMax, span)}
-        </span>
+        </div>
+        <div className="relative min-w-0 flex-1">
+          <svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img">
+            {/* grid วาดก่อนเส้นข้อมูล (อยู่ใต้เส้น) — non-scaling-stroke กันเส้นยืดตาม viewBox */}
+            {xTicks.map((t) => (
+              <line
+                key={`gx-${t}`}
+                x1={x(t)}
+                x2={x(t)}
+                y1={PAD_T}
+                y2={height - PAD_B}
+                stroke="#f3f4f6"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            {yTicks.map((v) => (
+              <line
+                key={`gy-${v}`}
+                x1={0}
+                x2={W}
+                y1={yPrimary(v)}
+                y2={yPrimary(v)}
+                stroke="#e5e7eb"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            {series.map((s) => {
+              const y = s.axis === 'secondary' && ySecondary ? ySecondary : yPrimary;
+              const d = pathFor(s.points, y);
+              if (!d) return null;
+              return (
+                <path
+                  key={s.key}
+                  d={d}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={1.5}
+                  vectorEffect="non-scaling-stroke"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  strokeDasharray={s.dashed ? '4 3' : undefined}
+                />
+              );
+            })}
+          </svg>
+          {/* ป้ายเวลากลางกราฟ (แกน x ถูกยืดตามความกว้าง เลยวางด้วย % + translateX(-50%)) */}
+          {xTicks.map((t) => {
+            const pct = ((t - domainMin) / span) * 100;
+            if (pct < edgePct || pct > 100 - edgePct) return null; // กันชนป้ายมุม
+            return (
+              <span
+                key={`lt-${t}`}
+                className="pointer-events-none absolute bottom-0 -translate-x-1/2 text-[10px] text-gray-400 lg:text-xs"
+                style={{ left: `${pct}%` }}
+              >
+                {fmtTime(t, span)}
+              </span>
+            );
+          })}
+          <span className="pointer-events-none absolute bottom-0 left-0 text-[10px] text-gray-400 lg:text-xs">
+            {fmtTime(domainMin, span)}
+          </span>
+          <span className="pointer-events-none absolute bottom-0 right-0 text-[10px] text-gray-400 lg:text-xs">
+            {fmtTime(domainMax, span)}
+          </span>
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 lg:gap-x-5">
         {series.map((s) => (
