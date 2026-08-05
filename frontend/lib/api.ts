@@ -30,6 +30,7 @@ import {
   resolveAllSupabaseAlerts,
   sendSupabaseCommand,
   setSupabaseAlertConfig,
+  setSupabaseAlertThreshold,
   updateSupabaseConfig,
 } from './supabaseData';
 import {
@@ -175,6 +176,10 @@ export function fetchAlertConfig(houseId: string = HOUSE_ID): Promise<AlertConfi
 }
 export function setAlertConfig(houseId: string, code: string, enabled: boolean): Promise<{ ok: boolean; message?: string }> {
   if (SUPABASE_ENABLED) return setSupabaseAlertConfig(houseId, code, enabled);
+  return Promise.resolve({ ok: true });
+}
+export function setAlertThreshold(houseId: string, code: string, threshold: number): Promise<{ ok: boolean; message?: string }> {
+  if (SUPABASE_ENABLED) return setSupabaseAlertThreshold(houseId, code, threshold);
   return Promise.resolve({ ok: true });
 }
 

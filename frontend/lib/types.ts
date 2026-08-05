@@ -77,10 +77,11 @@ export interface MappingSensor {
   romId: string | null; // rom ที่ผูกอยู่ตอนนี้ (null = ยังไม่จับคู่)
 }
 
-// ตาราง alert_config (supabase/migrations/008_alert_config.sql) — เปิด/ปิดการแจ้งเตือนต่อ code
+// ตาราง alert_config (008 + 009) — เปิด/ปิด + ค่าเกณฑ์การแจ้งเตือนต่อ code
 export interface AlertConfigRow {
   code: string;
   enabled: boolean;
+  threshold: number | null; // ค่าเกณฑ์ (แยกจาก setpoint); null = ไม่มีเกณฑ์ (LOW_WATER)
 }
 
 export type CommandAction = 'on' | 'off' | 'auto';

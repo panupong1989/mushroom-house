@@ -337,18 +337,26 @@ export async function countSupabaseAlerts(houseId: string, beforeIso?: string): 
   return error ? 0 : count ?? 0;
 }
 
-// alert_config: อ่าน/แก้ toggle เปิด-ปิดการแจ้งเตือนต่อ code
+// alert_config: อ่าน/แก้ toggle เปิด-ปิด + ค่าเกณฑ์ (threshold) การแจ้งเตือนต่อ code
 export async function fetchSupabaseAlertConfig(houseId: string): Promise<AlertConfigRow[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.from('alert_config').select('code,enabled').eq('house_id', houseId);
+  const { data, error } = await supabase.from('alert_config').select('code,enabled,threshold').eq('house_id', houseId);
   if (error || !data) return [];
-  return data.map((r) => ({ code: r.code, enabled: r.enabled }));
+  return data.map((r) => ({ code: r.code, enabled: r.enabled, threshold: r.threshold ?? null }));
 }
 export async function setSupabaseAlertConfig(houseId: string, code: string, enabled: boolean): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
   const { error } = await supabase
     .from('alert_config')
     .upsert({ house_id: houseId, code, enabled }, { onConflict: 'house_id,code' });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+export async function setSupabaseAlertThreshold(houseId: string, code: string, threshold: number): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase
+    .from('alert_config')
+    .upsert({ house_id: houseId, code, threshold }, { onConflict: 'house_id,code' });
   if (error) return { ok: false, message: error.message };
   return { ok: true };
 }

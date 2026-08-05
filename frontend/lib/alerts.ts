@@ -24,17 +24,18 @@ export function alertCodeLabel(code: string): string {
 export interface AlertConfigCode {
   code: string;
   label: string;
-  thresholdKey: string | null;
+  hasThreshold: boolean; // มีค่าเกณฑ์แก้ได้ไหม (LOW_WATER = ไม่มี)
+  defaultThreshold: number | null; // ค่าเริ่มต้นถ้า alert_config ยังไม่ตั้ง (เท่า seed ใน migration 009)
   unit: string;
   cmp: string; // '≥' | '>' | '<'
   safeNote: string; // interlock ที่ยังทำงานเสมอแม้ปิดแจ้งเตือน (ว่าง = ไม่มี)
 }
 export const ALERT_CONFIG_CODES: AlertConfigCode[] = [
-  { code: 'HOT', label: 'อากาศร้อนอันตราย', thresholdKey: 'temp_danger_hot', unit: '°C', cmp: '≥', safeNote: 'exhaust/mist ยังทำงานเสมอ' },
-  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', thresholdKey: 'bed_danger', unit: '°C', cmp: '≥', safeNote: 'heater ยังตัด + exhaust เปิดเสมอ' },
-  { code: 'RH_HIGH', label: 'ความชื้นสูงเกิน', thresholdKey: 'rh_max', unit: '%', cmp: '>', safeNote: '' },
-  { code: 'RH_LOW', label: 'ความชื้นต่ำเกิน', thresholdKey: 'rh_min', unit: '%', cmp: '<', safeNote: '' },
-  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', thresholdKey: null, unit: '', cmp: '', safeNote: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
+  { code: 'HOT', label: 'อากาศร้อนอันตราย', hasThreshold: true, defaultThreshold: 38, unit: '°C', cmp: '≥', safeNote: 'exhaust/mist ยังทำงานเสมอ' },
+  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', hasThreshold: true, defaultThreshold: 40, unit: '°C', cmp: '≥', safeNote: 'heater ยังตัด + exhaust เปิดเสมอ' },
+  { code: 'RH_HIGH', label: 'ความชื้นสูงเกิน', hasThreshold: true, defaultThreshold: 90, unit: '%', cmp: '>', safeNote: '' },
+  { code: 'RH_LOW', label: 'ความชื้นต่ำเกิน', hasThreshold: true, defaultThreshold: 85, unit: '%', cmp: '<', safeNote: '' },
+  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', hasThreshold: false, defaultThreshold: null, unit: '', cmp: '', safeNote: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
 ];
 
 // เรียง: ที่ "ยังไม่หาย" (resolved_at=null) ขึ้นก่อน -> รุนแรงกว่าก่อน -> ใหม่กว่าก่อน

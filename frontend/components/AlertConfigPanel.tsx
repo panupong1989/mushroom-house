@@ -1,25 +1,27 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from './Card';
-import { useConfig } from '@/lib/hooks';
-import { fetchAlertConfig, setAlertConfig } from '@/lib/api';
+import { fetchAlertConfig, setAlertConfig, setAlertThreshold } from '@/lib/api';
 import { ALERT_CONFIG_CODES } from '@/lib/alerts';
-import { FALLBACK_SETPOINTS } from '@/lib/constants';
 
-// การ์ด "ตั้งค่าการแจ้งเตือน" ในหน้าตั้งค่า — toggle เปิด/ปิดต่อชนิด + โชว์ค่าเกณฑ์ข้างปุ่ม
-// ค่าเกณฑ์ = setpoint เดียวกับที่ใช้คุม (เช่น HOT ใช้ temp_danger_hot) ยกเว้นน้ำต่ำที่ไม่มีเกณฑ์
-// ⚠️ ปิด = เงียบการแจ้งเตือนเท่านั้น · safety interlock ยังทำงานทุกกรณี (firmware)
+// การ์ด "ตั้งค่าการแจ้งเตือน" ในหน้าตั้งค่า — toggle เปิด/ปิด + แก้ "ค่าเกณฑ์" ต่อชนิด (แยกจาก setpoint)
+// ⚠️ ปิด/ตั้งค่า = คุมแค่ "เมื่อไหร่เด้งเตือน" · safety interlock (ตัดปั๊ม/heater) ทำงานทุกกรณีเสมอ
+interface CfgState {
+  enabled: boolean;
+  threshold: number | null;
+}
+
 export function AlertConfigPanel({ houseId }: { houseId: string }) {
-  const config = useConfig(houseId);
-  const setpoints = useMemo(() => ({ ...FALLBACK_SETPOINTS, ...(config ?? {}) }) as Record<string, number>, [config]);
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [cfg, setCfg] = useState<Record<string, CfgState>>({});
+  const [draft, setDraft] = useState<Record<string, string>>({}); // ค่าที่กำลังพิมพ์ในช่อง threshold
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetchAlertConfig(houseId).then((rows) => {
-      if (!cancelled) setEnabled(Object.fromEntries(rows.map((r) => [r.code, r.enabled])));
+      if (cancelled) return;
+      setCfg(Object.fromEntries(rows.map((r) => [r.code, { enabled: r.enabled, threshold: r.threshold }])));
     });
     return () => {
       cancelled = true;
@@ -27,36 +29,68 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
   }, [houseId]);
 
   async function toggle(code: string) {
-    const next = !(enabled[code] ?? true);
-    setEnabled((e) => ({ ...e, [code]: next })); // optimistic
+    const next = !(cfg[code]?.enabled ?? true);
+    setCfg((c) => ({ ...c, [code]: { enabled: next, threshold: c[code]?.threshold ?? null } })); // optimistic
     setMsg(null);
     const res = await setAlertConfig(houseId, code, next);
     if (!res.ok) {
-      setEnabled((e) => ({ ...e, [code]: !next })); // revert
+      setCfg((c) => ({ ...c, [code]: { enabled: !next, threshold: c[code]?.threshold ?? null } }));
       setMsg(`บันทึกไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่'}`);
     }
+  }
+
+  // บันทึกค่าเกณฑ์ตอน blur/Enter — validate เป็นตัวเลข
+  async function commitThreshold(code: string, fallback: number | null) {
+    const raw = draft[code];
+    setDraft((d) => {
+      const next = { ...d };
+      delete next[code];
+      return next;
+    });
+    if (raw == null || raw.trim() === '') return;
+    const v = parseFloat(raw);
+    if (Number.isNaN(v)) {
+      setMsg('ค่าเกณฑ์ต้องเป็นตัวเลข');
+      return;
+    }
+    if (v === (cfg[code]?.threshold ?? fallback)) return; // ไม่เปลี่ยน
+    setCfg((c) => ({ ...c, [code]: { enabled: c[code]?.enabled ?? true, threshold: v } })); // optimistic
+    setMsg(null);
+    const res = await setAlertThreshold(houseId, code, v);
+    if (!res.ok) setMsg(`บันทึกเกณฑ์ไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่'}`);
   }
 
   return (
     <Card title="🔔 ตั้งค่าการแจ้งเตือน">
       <p className="mb-2 text-[11px] text-gray-400">
-        ปิดได้แค่ &ldquo;การแจ้งเตือน&rdquo; — ระบบความปลอดภัย (ตัดปั๊ม/heater) ยังทำงานทุกกรณีเสมอ · เกณฑ์ = ค่าเดียวกับ setpoint
+        ตั้ง &ldquo;เมื่อไหร่เด้งเตือน&rdquo; ได้เอง (แยกจาก setpoint คุม AUTO) · ระบบความปลอดภัย (ตัดปั๊ม/heater) ยังทำงานทุกกรณีเสมอ
       </p>
       <div className="flex flex-col gap-1.5">
         {ALERT_CONFIG_CODES.map((c) => {
-          const on = enabled[c.code] ?? true;
-          const threshold =
-            c.thresholdKey != null && setpoints[c.thresholdKey] != null
-              ? `แจ้งเมื่อ ${c.cmp} ${setpoints[c.thresholdKey]}${c.unit}`
-              : c.safeNote || '—';
+          const on = cfg[c.code]?.enabled ?? true;
+          const value = cfg[c.code]?.threshold ?? c.defaultThreshold;
           return (
             <div key={c.code} className="flex items-center justify-between gap-2 rounded-xl2 bg-bg px-3 py-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-700">{c.label}</p>
-                <p className="truncate text-[10px] text-gray-400">
-                  {threshold}
-                  {c.thresholdKey != null && c.safeNote && <span> · {c.safeNote}</span>}
-                </p>
+                {c.hasThreshold ? (
+                  <p className="flex flex-wrap items-center gap-1 text-[11px] text-gray-500">
+                    แจ้งเมื่อ {c.cmp}
+                    <input
+                      type="number"
+                      value={draft[c.code] ?? (value ?? '')}
+                      onChange={(e) => setDraft((d) => ({ ...d, [c.code]: e.target.value }))}
+                      onBlur={() => commitThreshold(c.code, c.defaultThreshold)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                      className="w-14 rounded border border-gray-200 bg-card px-1 py-0.5 text-right text-xs"
+                      aria-label={`ค่าเกณฑ์ ${c.label}`}
+                    />
+                    {c.unit}
+                    {c.safeNote && <span className="text-gray-400">· {c.safeNote}</span>}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-gray-400">{c.safeNote}</p>
+                )}
               </div>
               <button
                 onClick={() => toggle(c.code)}
@@ -73,7 +107,7 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
       </div>
       {msg && <p className="mt-2 text-xs text-danger">{msg}</p>}
       <p className="mt-2 text-[11px] text-gray-400">
-        แก้ค่าเกณฑ์ได้ที่ &ldquo;ตั้งค่า setpoint&rdquo; ด้านบน · เคลียร์/ลบประวัติแจ้งเตือนอยู่ในการ์ด &ldquo;เคลียร์ข้อมูล&rdquo; ด้านล่าง
+        เคลียร์/ลบประวัติแจ้งเตือนอยู่ในการ์ด &ldquo;เคลียร์ข้อมูล&rdquo; ด้านล่าง · ความชื้นนอกช่วง = แจ้งอย่างเดียว ไม่หยุดระบบ
       </p>
     </Card>
   );
