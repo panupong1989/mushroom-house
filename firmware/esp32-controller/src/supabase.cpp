@@ -185,6 +185,34 @@ bool supabase_post_bed_scan(const char roms[][17], const float temps[], int n) {
   return code >= 200 && code < 300;
 }
 
+// --- alert_config cache (เปิด/ปิดการแจ้งเตือนต่อ code — supabase/migrations/008_alert_config.sql) ---
+struct AlertCfg { char code[24]; bool enabled; };
+static AlertCfg alert_cfg[8];
+static int alert_cfg_n = 0;
+
+bool supabase_fetch_alert_config() {
+  if (!net_online()) return false;
+  JsonDocument doc;
+  String url = rest("alert_config") + "?house_id=eq." + HOUSE_ID + "&select=code,enabled";
+  if (!get_json(url, doc)) return false;
+  int n = 0;
+  for (JsonObject o : doc.as<JsonArray>()) {
+    if (n >= 8) break;
+    const char *code = o["code"] | "";
+    strncpy(alert_cfg[n].code, code, sizeof(alert_cfg[n].code) - 1);
+    alert_cfg[n].code[sizeof(alert_cfg[n].code) - 1] = 0;
+    alert_cfg[n].enabled = o["enabled"] | true;
+    n++;
+  }
+  alert_cfg_n = n;
+  return true;
+}
+
+bool supabase_alert_enabled(const char *code) {
+  for (int i = 0; i < alert_cfg_n; i++) if (!strcmp(alert_cfg[i].code, code)) return alert_cfg[i].enabled;
+  return true;   // ไม่รู้จัก/ยังไม่โหลด = แจ้งเตือน (fail-safe: ไม่พลาด alert)
+}
+
 bool supabase_update_house_mode(const char *mode, const char *iso_or_null) {
   if (!net_online()) return false;
   HTTPClient http;
