@@ -49,6 +49,8 @@ export function MaintenancePanel({
   const [beforeDate, setBeforeDate] = useState('');
   const [pending, setPending] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // ผลการลบ แสดงในการ์ด "เคลียร์ข้อมูล" ตรงที่ผู้ใช้กด (ไม่ใช่ status การจับคู่ที่อยู่ไกลด้านบน)
+  const [deleteMsg, setDeleteMsg] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,17 +104,19 @@ export function MaintenancePanel({
     setDeleting(false);
     setPending(null);
     if (res.ok) {
-      setStatus({ kind: 'ok', msg: `ลบแล้ว ${res.count?.toLocaleString() ?? ''} แถว` });
+      setDeleteMsg({ kind: 'ok', msg: `✅ ลบสำเร็จ ${res.count?.toLocaleString() ?? 0} แถว` });
       setReloadKey((k) => k + 1);
     } else {
-      setStatus({ kind: 'err', msg: res.message ?? 'ลบไม่สำเร็จ — ตรวจสอบว่ายัง login อยู่' });
+      // โชว์ error จริงจาก Supabase ด้วย — ถ้า RPC ไม่มี (ยังไม่รัน migration 007) จะเห็นชัด
+      setDeleteMsg({ kind: 'err', msg: `❌ ลบไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่'}` });
     }
   }
 
   // เปิด dialog ลบ readings (all/before) — นับจำนวนก่อน แล้วอัปเดต count ใน dialog
   async function openPurge(kind: 'all' | 'before') {
+    setDeleteMsg(null);
     if (kind === 'before' && !beforeDate) {
-      setStatus({ kind: 'err', msg: 'เลือกวันก่อนกดลบข้อมูลก่อนวันที่' });
+      setDeleteMsg({ kind: 'err', msg: 'เลือกวันก่อนกดลบข้อมูลก่อนวันที่' });
       return;
     }
     const beforeIso = kind === 'before' ? new Date(endOfDayMs(beforeDate)).toISOString() : undefined;
@@ -130,6 +134,7 @@ export function MaintenancePanel({
   }
 
   function openResetRom() {
+    setDeleteMsg(null);
     setPending({
       title: 'ลบ mapping เซนเซอร์',
       description: 'รีเซ็ต rom_id ทุกตัว + ล้าง live scan — ต้องจับคู่ใหม่ทั้งหมด',
@@ -270,6 +275,18 @@ export function MaintenancePanel({
             ลบ mapping เซนเซอร์ <span className="text-[11px] font-normal">(รีเซ็ต rom_id ทั้งหมด)</span>
           </button>
         </div>
+
+        {/* ผลการลบ — โชว์ตรงนี้ (ที่ผู้ใช้กด) หลัง dialog ปิด */}
+        {deleteMsg && (
+          <div
+            className={`mt-2 rounded-xl2 p-2 text-sm font-medium ${
+              deleteMsg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-danger/10 text-danger'
+            }`}
+          >
+            {deleteMsg.msg}
+          </div>
+        )}
+
         <p className="mt-2 text-[11px] text-gray-400">
           ทุกปุ่มต้องยืนยันด้วยการพิมพ์ &ldquo;ลบ&rdquo; · ลบผ่าน RPC ที่ต้อง login เท่านั้น (anon ลบไม่ได้)
         </p>
