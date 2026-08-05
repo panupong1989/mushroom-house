@@ -35,3 +35,20 @@ void onewire_bed_read(BedReading out[3], float &bed_temp_max) {
   }
   bed_temp_max = okc ? tmax : NAN;
 }
+
+// อ่านทุกตัวบนบัส (ไม่ cap) — สำหรับ push ตาราง bed_scan ให้หน้า Maintenance จับคู่ ROM↔ตำแหน่ง
+// ใช้ getDeviceCount()/getAddress(i) ที่ enumerate ครบทุก device (ต่างจาก onewire_bed_read ที่วน i<3)
+int onewire_scan_all(char roms[][17], float temps[], int maxN) {
+  sensors.requestTemperatures();
+  int count = sensors.getDeviceCount();
+  int n = 0;
+  for (int i = 0; i < count && n < maxN; i++) {
+    DeviceAddress addr;
+    if (!sensors.getAddress(addr, i)) continue;
+    rom_to_str(addr, roms[n], 17);
+    float t = sensors.getTempC(addr);
+    temps[n] = (t == DEVICE_DISCONNECTED_C) ? NAN : t;
+    n++;
+  }
+  return n;
+}

@@ -22,6 +22,10 @@ bool supabase_post_event(const char *actuator_kind, bool state, const char *reas
 // insert alert
 bool supabase_post_alert(const char *code, const char *severity, const char *message);
 
+// upsert live ROM ที่เจอบนบัส 1-Wire ลงตาราง bed_scan (on_conflict house_id,rom_id) ให้หน้า
+// Maintenance จับคู่ ROM↔ตำแหน่ง — ไม่ต้องรอ resolve ids (keyed ด้วย house_id+rom_id ไม่ใช่ sensor_id)
+bool supabase_post_bed_scan(const char roms[][17], const float temps[], int n);
+
 // update houses.last_mode (+ last_mode_ts ถ้ามีเวลา NTP) — ให้ dashboard โชว์โหมด FSM ล่าสุด
 bool supabase_update_house_mode(const char *mode, const char *iso_or_null);
 

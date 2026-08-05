@@ -159,6 +159,32 @@ bool supabase_post_alert(const char *code, const char *severity, const char *mes
   return post_body("alerts", body);
 }
 
+bool supabase_post_bed_scan(const char roms[][17], const float temps[], int n) {
+  if (!net_online() || n <= 0) return false;
+  JsonDocument doc;
+  JsonArray arr = doc.to<JsonArray>();
+  char iso[24];
+  bool have_time = net_iso_time(iso, sizeof(iso));   // updated_at ต้อง set เอง (upsert ไม่ trigger default now())
+  for (int i = 0; i < n; i++) {
+    JsonObject o = arr.add<JsonObject>();
+    o["house_id"] = HOUSE_ID;
+    o["rom_id"] = roms[i];
+    if (isnan(temps[i])) o["temp_c"] = nullptr; else o["temp_c"] = temps[i];
+    if (have_time) o["updated_at"] = iso;
+  }
+  String body;
+  serializeJson(doc, body);
+
+  HTTPClient http;
+  if (!http.begin(secure, rest("bed_scan") + "?on_conflict=house_id,rom_id")) return false;
+  add_auth_headers(http);
+  http.addHeader("Prefer", "resolution=merge-duplicates,return=minimal");   // upsert
+  int code = http.POST(body);
+  if (code < 200 || code >= 300) Serial.printf("[supabase] POST bed_scan -> %d\n", code);
+  http.end();
+  return code >= 200 && code < 300;
+}
+
 bool supabase_update_house_mode(const char *mode, const char *iso_or_null) {
   if (!net_online()) return false;
   HTTPClient http;
