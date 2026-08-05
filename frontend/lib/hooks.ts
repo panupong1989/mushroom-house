@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { fetchAlerts, fetchConfig, fetchLatest, fetchSensorHistory, fetchSensorMeta } from './api';
 import { SUPABASE_ENABLED, supabase } from './supabaseClient';
-import { subscribeSupabaseAlerts, subscribeSupabaseLatest } from './supabaseData';
+import { subscribeBedScan, subscribeSupabaseAlerts, subscribeSupabaseLatest } from './supabaseData';
+import { buildMockBedScan } from './mock';
 import { POLL_INTERVAL_MS } from './constants';
 import type { RangeKey, SensorSeriesRow } from './history';
-import type { AlertRow, ConfigResponse, LatestResponse, SensorMetaRow } from './types';
+import type { AlertRow, BedScanRow, ConfigResponse, LatestResponse, SensorMetaRow } from './types';
 
 export interface SessionState {
   session: Session | null;
@@ -61,6 +62,37 @@ export function useChartHeight(): number {
     };
   }, []);
   return height;
+}
+
+// live ROM ที่ ESP32 เจอบนบัส 1-Wire (ตาราง bed_scan) — realtime ตอนมี Supabase, mock ตอน dev
+// (หน้า Maintenance เอาไป live-mapping) — โหมด mock คืนชุดคงที่ครั้งเดียว
+export interface BedScanState {
+  rows: BedScanRow[];
+  loading: boolean;
+}
+export function useBedScan(houseId: string): BedScanState {
+  const [state, setState] = useState<BedScanState>({ rows: [], loading: true });
+  useEffect(() => {
+    let cancelled = false;
+    if (!SUPABASE_ENABLED) {
+      setState({ rows: buildMockBedScan(), loading: false });
+      return;
+    }
+    const unsubscribe = subscribeBedScan(
+      houseId,
+      (rows) => {
+        if (!cancelled) setState({ rows, loading: false });
+      },
+      () => {
+        if (!cancelled) setState((s) => ({ ...s, loading: false }));
+      }
+    );
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [houseId]);
+  return state;
 }
 
 export interface LatestState {

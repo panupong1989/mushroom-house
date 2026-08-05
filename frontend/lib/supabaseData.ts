@@ -7,11 +7,13 @@ import type {
   ActuatorKind,
   ActuatorStateRow,
   AlertRow,
+  BedScanRow,
   CommandAction,
   CommandResult,
   ConfigResponse,
   FsmMode,
   LatestResponse,
+  MappingSensor,
   SensorMetaRow,
   SensorReadingRow,
 } from './types';
@@ -412,6 +414,129 @@ export async function updateSupabaseConfig(
     return { ok: false, message: `บันทึกไม่สำเร็จ — ${error.message}` };
   }
   return { ok: true };
+}
+
+// ===========================================================================
+// หน้า Maintenance (supabase/migrations/007_maintenance.sql)
+// ===========================================================================
+
+// subscribe ตาราง bed_scan (live ROM + temp ที่ ESP32 push) แบบ realtime — mirror subscribeSupabaseAlerts
+// keyed ด้วย rom_id (upsert 1 แถวต่อ rom); DELETE = ลบออกจาก map (เช่น reset mapping)
+export function subscribeBedScan(
+  houseId: string,
+  onData: (rows: BedScanRow[]) => void,
+  onError: (message: string) => void
+): () => void {
+  if (!supabase) {
+    onError('Supabase client ยังไม่พร้อมใช้งาน');
+    return () => {};
+  }
+  const client = supabase;
+  let cancelled = false;
+  const map = new Map<string, BedScanRow>();
+  const emit = () => {
+    if (!cancelled) onData(Array.from(map.values()));
+  };
+
+  const toRow = (r: { rom_id: string; temp_c: number | null; updated_at: string }): BedScanRow => ({
+    romId: r.rom_id,
+    tempC: r.temp_c,
+    updatedAt: r.updated_at,
+  });
+
+  client
+    .from('bed_scan')
+    .select('rom_id,temp_c,updated_at')
+    .eq('house_id', houseId)
+    .then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        onError('โหลด live scan ไม่สำเร็จ');
+        return;
+      }
+      for (const r of data ?? []) map.set(r.rom_id, toRow(r));
+      emit();
+    });
+
+  const channel = client
+    .channel(`house-${houseId}-bedscan`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'bed_scan', filter: `house_id=eq.${houseId}` },
+      (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const old = payload.old as { rom_id?: string };
+          if (old?.rom_id) map.delete(old.rom_id);
+        } else {
+          const r = payload.new as { rom_id: string; temp_c: number | null; updated_at: string };
+          map.set(r.rom_id, toRow(r));
+        }
+        emit();
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onError('การเชื่อมต่อ realtime (live scan) ขัดข้อง — กำลังลองใหม่');
+      }
+    });
+
+  return () => {
+    cancelled = true;
+    client.removeChannel(channel);
+  };
+}
+
+// record ตำแหน่งเซนเซอร์ (bed_temp + outside_temp) พร้อม rom_id ที่ผูกอยู่ — สำหรับ dropdown จับคู่
+export async function fetchSupabaseMappingSensors(houseId: string): Promise<MappingSensor[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('sensors')
+    .select('id,kind,address,rom_id')
+    .eq('house_id', houseId)
+    .in('kind', ['bed_temp', 'outside_temp']);
+  if (error || !data) return [];
+  return data.map((r) => ({ id: r.id, kind: r.kind, address: r.address, romId: r.rom_id ?? null }));
+}
+
+// จับคู่ rom → ตำแหน่ง (RPC assign_sensor_rom — authenticated เท่านั้น) · address '' = ปลดเป็นว่าง
+export async function assignSupabaseSensorRom(
+  houseId: string,
+  rom: string,
+  address: string
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase.rpc('assign_sensor_rom', { p_house: houseId, p_rom: rom, p_address: address });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+// นับ readings (ก่อนลบ — โชว์ใน dialog ยืนยัน) · beforeIso ระบุ = นับเฉพาะก่อนวันนั้น
+export async function countSupabaseReadings(houseId: string, beforeIso?: string): Promise<number> {
+  if (!supabase) return 0;
+  let q = supabase.from('sensor_readings').select('*', { count: 'exact', head: true }).eq('house_id', houseId);
+  if (beforeIso) q = q.lt('ts', beforeIso);
+  const { count, error } = await q;
+  return error ? 0 : count ?? 0;
+}
+
+async function callPurgeRpc(
+  name: string,
+  params: Record<string, unknown>
+): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { data, error } = await supabase.rpc(name, params);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, count: Number(data) };
+}
+
+export function purgeSupabaseReadingsAll(houseId: string) {
+  return callPurgeRpc('purge_readings_all', { p_house: houseId });
+}
+export function purgeSupabaseReadingsBefore(houseId: string, beforeIso: string) {
+  return callPurgeRpc('purge_readings_before', { p_house: houseId, p_before: beforeIso });
+}
+export function resetSupabaseSensorRom(houseId: string) {
+  return callPurgeRpc('reset_sensor_rom', { p_house: houseId });
 }
 
 // สั่ง manual (โหมด Internet) = insert แถวลงตาราง commands — ESP32 (service_role) จะรับคำสั่งไป

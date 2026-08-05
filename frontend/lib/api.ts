@@ -1,20 +1,27 @@
-import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, SensorMetaRow } from './types';
+import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, MappingSensor, SensorMetaRow } from './types';
 import {
   MOCK_SENSOR_META,
   buildMockAirHistory,
   buildMockAlerts,
   buildMockConfig,
   buildMockLatest,
+  buildMockMappingSensors,
   buildMockSensorReadings,
   mockSendActuatorCommand,
 } from './mock';
 import { SUPABASE_ENABLED } from './supabaseClient';
 import {
+  assignSupabaseSensorRom,
+  countSupabaseReadings,
   fetchSupabaseAirHistory,
   fetchSupabaseAlerts,
   fetchSupabaseConfig,
+  fetchSupabaseMappingSensors,
   fetchSupabaseSensorHistory,
   fetchSupabaseSensorMeta,
+  purgeSupabaseReadingsAll,
+  purgeSupabaseReadingsBefore,
+  resetSupabaseSensorRom,
   sendSupabaseCommand,
   updateSupabaseConfig,
 } from './supabaseData';
@@ -110,6 +117,32 @@ export function updateConfig(
 ): Promise<{ ok: boolean; message?: string }> {
   if (SUPABASE_ENABLED) return updateSupabaseConfig(houseId, updates);
   return Promise.resolve({ ok: true });
+}
+
+// ---- หน้า Maintenance: Supabase (ต้อง login สำหรับปุ่มเขียน/ลบ) > mock (dev = ตอบสำเร็จ ไม่ persist) ----
+export function fetchMappingSensors(houseId: string = HOUSE_ID): Promise<MappingSensor[]> {
+  if (SUPABASE_ENABLED) return fetchSupabaseMappingSensors(houseId);
+  return Promise.resolve(buildMockMappingSensors());
+}
+export function assignSensorRom(houseId: string, rom: string, address: string): Promise<{ ok: boolean; message?: string }> {
+  if (SUPABASE_ENABLED) return assignSupabaseSensorRom(houseId, rom, address);
+  return Promise.resolve({ ok: true });
+}
+export function countReadings(houseId: string = HOUSE_ID, beforeIso?: string): Promise<number> {
+  if (SUPABASE_ENABLED) return countSupabaseReadings(houseId, beforeIso);
+  return Promise.resolve(1234); // dev: จำนวนหลอกให้เห็นใน dialog
+}
+export function purgeReadingsAll(houseId: string = HOUSE_ID): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (SUPABASE_ENABLED) return purgeSupabaseReadingsAll(houseId);
+  return Promise.resolve({ ok: true, count: 1234 });
+}
+export function purgeReadingsBefore(houseId: string, beforeIso: string): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (SUPABASE_ENABLED) return purgeSupabaseReadingsBefore(houseId, beforeIso);
+  return Promise.resolve({ ok: true, count: 567 });
+}
+export function resetSensorRom(houseId: string = HOUSE_ID): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (SUPABASE_ENABLED) return resetSupabaseSensorRom(houseId);
+  return Promise.resolve({ ok: true, count: 3 });
 }
 
 export function fetchConfig(houseId: string = HOUSE_ID, profile?: string): Promise<ConfigResponse> {

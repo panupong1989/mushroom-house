@@ -61,6 +61,22 @@ export interface SensorMetaRow {
   tier: string | null; // 'top' | 'mid' | 'bottom' เฉพาะ bed_temp
 }
 
+// ตาราง bed_scan (supabase/migrations/007_maintenance.sql) — live ROM ที่ ESP32 เจอบนบัส 1-Wire
+// (upsert ทุก ~3 วิ, 1 แถวต่อ rom) ใช้ทำ live-mapping ในหน้า Maintenance
+export interface BedScanRow {
+  romId: string;
+  tempC: number | null;
+  updatedAt: string;
+}
+
+// record ตำแหน่งเซนเซอร์ (sensors) สำหรับจับคู่ ROM — kind = 'bed_temp' | 'outside_temp'
+export interface MappingSensor {
+  id: number;
+  kind: string;
+  address: string; // key ตำแหน่งคงที่ (เช่น 'row1_head_top', 'outside') — ดู lib/maintenance.ts
+  romId: string | null; // rom ที่ผูกอยู่ตอนนี้ (null = ยังไม่จับคู่)
+}
+
 export type CommandAction = 'on' | 'off' | 'auto';
 
 export interface CommandOkResult {
