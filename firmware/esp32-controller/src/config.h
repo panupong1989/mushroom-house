@@ -44,9 +44,11 @@
 #define MQTT_BASE       "mush"      // -> mush/house-01/...
 
 // ---------- RS485 (Modbus RTU) ----------
-#define RS485_RX_PIN    16
-#define RS485_TX_PIN    17
-#define RS485_DE_RE_PIN 4          // -1 if auto-direction board
+// ยืนยันหน้างาน (diag_rs485): ต้อง ESP32 TX=GPIO16, RX=GPIO17 (สายที่บอร์ดแปลงต่อสลับจากเดิม)
+// และบอร์ดแปลงเป็นแบบ auto-direction (ฝั่ง TTL มีแค่ GND/RXD/TXD/VCC ไม่มี DE/RE) → DE_RE=-1
+#define RS485_RX_PIN    17
+#define RS485_TX_PIN    16
+#define RS485_DE_RE_PIN -1         // auto-direction board (ยืนยันหน้างาน) — ไม่ต้องคุมทิศ
 #define RS485_BAUD      9600
 static const uint8_t RS485_ADDR[3] = {1, 2, 3};   // head, mid, tail
 // location string ต่อจุด (ตรงกับ sensors.location ใน supabase/migrations/001_init.sql) —
