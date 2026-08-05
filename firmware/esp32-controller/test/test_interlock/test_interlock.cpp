@@ -17,8 +17,9 @@ static SensorSnapshot make_snap(float air, float rh, float bed, bool water) {
   SensorSnapshot s{};
   for (int i = 0; i < 3; i++) {
     s.air[i].addr = (uint8_t)(i + 1); s.air[i].temp = air; s.air[i].rh = rh; s.air[i].ok = true;
-    s.bed[i].temp = bed; s.bed[i].ok = true;
   }
+  // DS18B20: ป้อน 1 ตัวลง ds[] ให้สอดคล้องโครงใหม่ · interlock ใช้ bed_temp_max (เซ็ตตรงด้านล่าง)
+  s.ds[0].temp = bed; s.ds[0].ok = true; s.ds_n = 1;
   s.air_temp_ctrl = air; s.air_rh_ctrl = rh; s.bed_temp_max = bed; s.water_ok = water; s.ts = 1;
   return s;
 }
