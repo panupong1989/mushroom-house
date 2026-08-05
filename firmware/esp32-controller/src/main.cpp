@@ -27,7 +27,7 @@ static ActuatorState prev_act{};
 static bool prev_act_valid = false;
 static char prev_alert[24] = {0};
 
-static uint32_t t_ctrl = 0, t_readings = 0, t_poll = 0, t_hb = 0, t_resolve = 0;
+static uint32_t t_ctrl = 0, t_readings = 0, t_poll = 0, t_hb = 0, t_resolve = 0, t_scan = 0;
 
 static bool read_float_water() { return digitalRead(FLOAT_PIN) == HIGH; } // ปรับตามการต่อ
 
@@ -175,6 +175,16 @@ void loop() {
 #if USE_MQTT
     mqtt_publish_telemetry(last_snap, control_mode());
 #endif
+  }
+
+  // ---- push live ROM (bed_scan) ให้หน้า Maintenance จับคู่ ROM↔ตำแหน่ง (ทุก 5 วิ ถ้ามีเน็ต) ----
+  // diagnostic/mapping ล้วนๆ — ไม่ป้อน control/safety (bed_temp_max ยังมาจาก read_sensors/onewire_bed_read)
+  if (net_online() && now - t_scan >= BED_SCAN_POST_PERIOD_MS) {
+    t_scan = now;
+    static char roms[ONEWIRE_SCAN_MAX][17];
+    static float temps[ONEWIRE_SCAN_MAX];
+    int found = onewire_scan_all(roms, temps, ONEWIRE_SCAN_MAX);
+    if (found > 0) supabase_post_bed_scan(roms, temps, found);
   }
 
   // ---- โหมด Internet: poll ตาราง commands รับคำสั่ง manual จาก dashboard ----

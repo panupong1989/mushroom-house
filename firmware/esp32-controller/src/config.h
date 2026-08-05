@@ -92,3 +92,4 @@ struct Setpoints {
 #define COMMAND_POLL_PERIOD_MS  4000    // poll ตาราง commands (3-5s) — โหมด Internet
 #define HEARTBEAT_PERIOD_MS     30000
 #define TELEMETRY_PERIOD_MS     15000   // (legacy MQTT)
+#define BED_SCAN_POST_PERIOD_MS 5000    // upsert bed_scan (live ROM) ให้หน้า Maintenance จับคู่
