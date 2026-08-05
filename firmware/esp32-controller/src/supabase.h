@@ -13,8 +13,18 @@ void supabase_begin();
 bool supabase_resolve_ids();
 bool supabase_ids_ready();
 
-// insert ค่าเซนเซอร์ล่าสุดทั้งชุด (air temp/rh x3, bed temp x3, water level) ลง sensor_readings
+// insert ค่าเซนเซอร์ล่าสุดทั้งชุด (air temp/rh, DS18B20 ทุกตัวตาม rom_id, water) ลง sensor_readings
 bool supabase_post_readings(const SensorSnapshot &s);
+
+// อ่านตาราง sensors (id, rom_id, kind) มา cache map: rom -> (sensor_id, is_outside) ไว้ใช้:
+//  - โพสต์ readings ของ DS18B20 แต่ละตัวเข้า sensor_id ที่จับคู่ไว้
+//  - บอกว่า rom ไหนคือ outside (กันออกจาก bed_temp_max) — เรียกเป็นระยะเมื่อ online
+bool supabase_fetch_rom_map();
+// sensor_id ของ rom นี้ (-1 ถ้ายังไม่จับคู่/ไม่รู้จัก) — โพสต์ readings ตามนี้
+long supabase_sensor_id_for_rom(const char *rom);
+// rom นี้เป็น outside_temp ไหม (คืน false ถ้าไม่รู้จัก = นับเป็นกอง = fail-safe คิดใน bed_temp_max)
+// ⚠️ อ่านจาก RAM cache เท่านั้น (ไม่ยิงเน็ต) — read_sensors/safety เรียกได้แบบ edge-autonomous
+bool supabase_rom_is_outside(const char *rom);
 
 // insert 1 เหตุการณ์รีเลย์เปลี่ยนสถานะ ลง actuator_events (source: "auto"|"manual"|"safety")
 bool supabase_post_event(const char *actuator_kind, bool state, const char *reason, const char *source);

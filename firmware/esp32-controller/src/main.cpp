@@ -43,7 +43,16 @@ static void read_sensors(SensorSnapshot &s) {
   s.air_temp_ctrl = okc ? tmax : NAN;
   float rhsum = 0; int rhc = 0; for (int i = 0; i < 3; i++) if (s.air[i].ok) { rhsum += s.air[i].rh; rhc++; }
   s.air_rh_ctrl = rhc ? rhsum / rhc : NAN;
-  onewire_bed_read(s.bed, s.bed_temp_max);
+
+  // อ่าน DS18B20 ทุกตัว (กอง + นอกโรง) — bed_temp_max = max เฉพาะตัวที่ "ไม่ใช่ outside"
+  // supabase_rom_is_outside อ่านจาก RAM cache (ไม่ยิงเน็ต) → edge-autonomous · ไม่รู้จัก=นับเป็นกอง (fail-safe)
+  onewire_read_all(s.ds, SNAP_DS_MAX, s.ds_n);
+  float bmax = -100.0f; int bok = 0;
+  for (int i = 0; i < s.ds_n; i++) {
+    if (!s.ds[i].ok || supabase_rom_is_outside(s.ds[i].rom)) continue;
+    bok++; if (s.ds[i].temp > bmax) bmax = s.ds[i].temp;
+  }
+  s.bed_temp_max = bok ? bmax : NAN;
   s.water_ok = read_float_water();
 }
 
@@ -129,13 +138,14 @@ void loop() {
   // resolve sensor/actuator ids ครั้งเดียวเมื่อมีเน็ต (retry ทุก 10s จนสำเร็จ)
   if (net_online() && !supabase_ids_ready() && now - t_resolve >= 10000) {
     t_resolve = now;
-    if (supabase_resolve_ids()) supabase_fetch_alert_config();   // โหลด config แจ้งเตือนครั้งแรกทันทีที่พร้อม
+    if (supabase_resolve_ids()) { supabase_fetch_alert_config(); supabase_fetch_rom_map(); }   // โหลดครั้งแรกทันทีที่พร้อม
   }
 
-  // refresh alert_config ทุก 60s (ผู้ใช้ toggle เปิด/ปิดแจ้งเตือนจาก dashboard ได้ระหว่างทาง)
+  // refresh alert_config + rom map ทุก 60s (ผู้ใช้ toggle แจ้งเตือน / จับคู่ ROM ใหม่จาก dashboard ได้ระหว่างทาง)
   if (net_online() && now - t_alertcfg >= 60000) {
     t_alertcfg = now;
     supabase_fetch_alert_config();
+    supabase_fetch_rom_map();
   }
 
   // ---- control loop (edge-autonomous ทุก CONTROL_PERIOD_MS ไม่ว่าโหมดไหน/เน็ตมีหรือไม่) ----

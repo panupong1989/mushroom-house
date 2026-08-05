@@ -114,6 +114,41 @@ static void add_reading(JsonArray arr, long sensor_id, const char *metric, float
   o["value"] = value;
 }
 
+// --- rom map (rom -> sensor_id + is_outside) จากตาราง sensors.rom_id ที่จับคู่ในหน้า Maintenance ---
+struct RomMap { char rom[17]; long sensor_id; bool is_outside; };
+static RomMap rom_map[16];
+static int rom_map_n = 0;
+
+bool supabase_fetch_rom_map() {
+  if (!net_online()) return false;
+  JsonDocument doc;
+  String url = rest("sensors") + "?house_id=eq." + HOUSE_ID + "&rom_id=not.is.null&select=id,rom_id,kind";
+  if (!get_json(url, doc)) return false;
+  int n = 0;
+  for (JsonObject o : doc.as<JsonArray>()) {
+    if (n >= 16) break;
+    const char *rom = o["rom_id"] | "";
+    if (!*rom) continue;
+    strncpy(rom_map[n].rom, rom, sizeof(rom_map[n].rom) - 1);
+    rom_map[n].rom[sizeof(rom_map[n].rom) - 1] = 0;
+    rom_map[n].sensor_id = o["id"] | -1;
+    rom_map[n].is_outside = !strcmp(o["kind"] | "", "outside_temp");
+    n++;
+  }
+  rom_map_n = n;
+  return true;
+}
+
+long supabase_sensor_id_for_rom(const char *rom) {
+  for (int i = 0; i < rom_map_n; i++) if (!strcmp(rom_map[i].rom, rom)) return rom_map[i].sensor_id;
+  return -1;
+}
+
+bool supabase_rom_is_outside(const char *rom) {
+  for (int i = 0; i < rom_map_n; i++) if (!strcmp(rom_map[i].rom, rom)) return rom_map[i].is_outside;
+  return false;   // ไม่รู้จัก = นับเป็นกอง (fail-safe: รวมใน bed_temp_max)
+}
+
 bool supabase_post_readings(const SensorSnapshot &s) {
   if (!ids_ready) return false;
   JsonDocument doc;
@@ -123,7 +158,12 @@ bool supabase_post_readings(const SensorSnapshot &s) {
     add_reading(arr, air_id[i], "temp", s.air[i].temp);
     add_reading(arr, air_id[i], "rh", s.air[i].rh);
   }
-  for (int i = 0; i < 3; i++) if (s.bed[i].ok) add_reading(arr, bed_id[i], "temp", s.bed[i].temp);
+  // DS18B20 ทุกตัว: โพสต์เข้า sensor_id ที่จับคู่ rom ไว้ (ทั้งกอง 6 จุด + นอกโรง) — ข้ามตัวที่ยังไม่ map
+  for (int i = 0; i < s.ds_n; i++) {
+    if (!s.ds[i].ok) continue;
+    long sid = supabase_sensor_id_for_rom(s.ds[i].rom);
+    if (sid >= 0) add_reading(arr, sid, "temp", s.ds[i].temp);
+  }
   add_reading(arr, water_id, "level", s.water_ok ? 1.0f : 0.0f);
   if (arr.size() == 0) return false;
   String body;
