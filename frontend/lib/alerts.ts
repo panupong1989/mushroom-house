@@ -9,6 +9,8 @@ export const ALERT_CODE_LABEL: Record<string, string> = {
   LOW_WATER: 'ระดับน้ำต่ำ',
   BED_OVERHEAT: 'กองร้อนเกิน',
   HOT: 'อากาศร้อนอันตราย',
+  RH_HIGH: 'ความชื้นสูงเกิน',
+  RH_LOW: 'ความชื้นต่ำเกิน',
   COLD: 'อากาศเย็นเกิน',
   SENSOR_LOST: 'เซนเซอร์หลุด',
 };
@@ -18,10 +20,21 @@ export function alertCodeLabel(code: string): string {
 
 // code ที่เปิด/ปิดการแจ้งเตือนได้ (ตรงกับ safety.cpp + seed ใน 008_alert_config.sql)
 // ปิดได้แค่ "การแจ้งเตือน" — safety interlock ใน firmware ยังทำงานเสมอ (ดู migration 008)
-export const ALERT_CONFIG_CODES: { code: string; label: string; note: string }[] = [
-  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', note: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
-  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', note: 'heater ยังตัด + exhaust ยังเปิดเสมอ' },
-  { code: 'HOT', label: 'อากาศร้อนอันตราย', note: 'exhaust/mist ยังทำงานเสมอ' },
+// thresholdKey = key ใน setpoint ที่เป็น "ค่าเกณฑ์" ของ alert (โชว์ข้างปุ่ม); null = ไม่มีเกณฑ์ (น้ำต่ำ)
+export interface AlertConfigCode {
+  code: string;
+  label: string;
+  thresholdKey: string | null;
+  unit: string;
+  cmp: string; // '≥' | '>' | '<'
+  safeNote: string; // interlock ที่ยังทำงานเสมอแม้ปิดแจ้งเตือน (ว่าง = ไม่มี)
+}
+export const ALERT_CONFIG_CODES: AlertConfigCode[] = [
+  { code: 'HOT', label: 'อากาศร้อนอันตราย', thresholdKey: 'temp_danger_hot', unit: '°C', cmp: '≥', safeNote: 'exhaust/mist ยังทำงานเสมอ' },
+  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', thresholdKey: 'bed_danger', unit: '°C', cmp: '≥', safeNote: 'heater ยังตัด + exhaust เปิดเสมอ' },
+  { code: 'RH_HIGH', label: 'ความชื้นสูงเกิน', thresholdKey: 'rh_max', unit: '%', cmp: '>', safeNote: '' },
+  { code: 'RH_LOW', label: 'ความชื้นต่ำเกิน', thresholdKey: 'rh_min', unit: '%', cmp: '<', safeNote: '' },
+  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', thresholdKey: null, unit: '', cmp: '', safeNote: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
 ];
 
 // เรียง: ที่ "ยังไม่หาย" (resolved_at=null) ขึ้นก่อน -> รุนแรงกว่าก่อน -> ใหม่กว่าก่อน

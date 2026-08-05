@@ -15,6 +15,7 @@ import { HistorySection } from '@/components/HistorySection';
 import { AlertsSection } from '@/components/AlertsSection';
 import { LoginPanel } from '@/components/LoginPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { AlertConfigPanel } from '@/components/AlertConfigPanel';
 import { MaintenancePanel } from '@/components/MaintenancePanel';
 import { TabNav, type TabKey } from '@/components/TabNav';
 import { ToastStack, type Toast } from '@/components/ToastStack';
@@ -151,7 +152,7 @@ export default function Page() {
 
       {tab === 'history' && <HistorySection houseId={houseId} />}
 
-      {tab === 'alerts' && <AlertsSection houseId={houseId} canManage={canControl} />}
+      {tab === 'alerts' && <AlertsSection houseId={houseId} />}
 
       {tab === 'settings' && (
         <div className="flex flex-col gap-4">
@@ -165,7 +166,12 @@ export default function Page() {
               </div>
             )}
           </div>
-          {canControl && <MaintenancePanel houseId={houseId} telemetry={telemetry} mode={latest?.mode ?? null} />}
+          {canControl && (
+            <>
+              <AlertConfigPanel houseId={houseId} />
+              <MaintenancePanel houseId={houseId} telemetry={telemetry} mode={latest?.mode ?? null} />
+            </>
+          )}
         </div>
       )}
 
