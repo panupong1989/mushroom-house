@@ -327,11 +327,11 @@ export function buildMockBedScan(nowMs: number = Date.now()): BedScanRow[] {
 // mock alert_config (dev/preview) — 3 code เปิดหมด
 export function buildMockAlertConfig(): AlertConfigRow[] {
   return [
-    { code: 'HOT', enabled: true },
-    { code: 'BED_OVERHEAT', enabled: true },
-    { code: 'RH_HIGH', enabled: true },
-    { code: 'RH_LOW', enabled: true },
-    { code: 'LOW_WATER', enabled: false }, // เฟส1 mock: ปิดน้ำต่ำไว้ให้เห็นตัวอย่าง
+    { code: 'HOT', enabled: true, threshold: 38 },
+    { code: 'BED_OVERHEAT', enabled: true, threshold: 40 },
+    { code: 'RH_HIGH', enabled: true, threshold: 90 },
+    { code: 'RH_LOW', enabled: true, threshold: 85 },
+    { code: 'LOW_WATER', enabled: false, threshold: null }, // เฟส1 mock: ปิดน้ำต่ำไว้ให้เห็นตัวอย่าง
   ];
 }
 
