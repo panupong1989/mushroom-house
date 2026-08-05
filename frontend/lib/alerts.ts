@@ -16,6 +16,14 @@ export function alertCodeLabel(code: string): string {
   return ALERT_CODE_LABEL[code] ?? code;
 }
 
+// code ที่เปิด/ปิดการแจ้งเตือนได้ (ตรงกับ safety.cpp + seed ใน 008_alert_config.sql)
+// ปิดได้แค่ "การแจ้งเตือน" — safety interlock ใน firmware ยังทำงานเสมอ (ดู migration 008)
+export const ALERT_CONFIG_CODES: { code: string; label: string; note: string }[] = [
+  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', note: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
+  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', note: 'heater ยังตัด + exhaust ยังเปิดเสมอ' },
+  { code: 'HOT', label: 'อากาศร้อนอันตราย', note: 'exhaust/mist ยังทำงานเสมอ' },
+];
+
 // เรียง: ที่ "ยังไม่หาย" (resolved_at=null) ขึ้นก่อน -> รุนแรงกว่าก่อน -> ใหม่กว่าก่อน
 export function sortAlerts(rows: AlertRow[]): AlertRow[] {
   return [...rows].sort((a, b) => {

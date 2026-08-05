@@ -7,6 +7,7 @@ import { bucketSensorReadings, type SensorSeriesRow } from './history';
 import type {
   ActuatorKind,
   ActuatorStateRow,
+  AlertConfigRow,
   AlertRow,
   BedScanRow,
   CommandAction,
@@ -321,6 +322,15 @@ const MOCK_ROMS = [
 export function buildMockBedScan(nowMs: number = Date.now()): BedScanRow[] {
   const iso = new Date(nowMs).toISOString();
   return MOCK_ROMS.map((romId, i) => ({ romId, tempC: round1(31 + Math.sin(i) * 0.8), updatedAt: iso }));
+}
+
+// mock alert_config (dev/preview) — 3 code เปิดหมด
+export function buildMockAlertConfig(): AlertConfigRow[] {
+  return [
+    { code: 'LOW_WATER', enabled: true },
+    { code: 'BED_OVERHEAT', enabled: true },
+    { code: 'HOT', enabled: true },
+  ];
 }
 
 // 7 ตำแหน่ง (6 bed + 1 outside) ตรงกับ address ใน supabase/migrations/005 — 3 ตัวแรก map ไว้แล้ว

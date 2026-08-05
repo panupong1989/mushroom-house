@@ -6,6 +6,7 @@ import { RANGE_MS, RANGE_META, type AirHistory, type HistoryRange, type Point, t
 import type {
   ActuatorKind,
   ActuatorStateRow,
+  AlertConfigRow,
   AlertRow,
   BedScanRow,
   CommandAction,
@@ -310,6 +311,46 @@ export async function fetchSupabaseAlerts(houseId: string): Promise<AlertRow[]> 
     .limit(ALERTS_LIMIT);
   if (error || !data) return [];
   return data as AlertRow[];
+}
+
+// ---- จัดการ alert (authenticated เท่านั้น — supabase/migrations/008_alert_config.sql) ----
+async function callAlertRpc(name: string, params: Record<string, unknown>): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { data, error } = await supabase.rpc(name, params);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, count: Number(data) };
+}
+export function resolveAllSupabaseAlerts(houseId: string) {
+  return callAlertRpc('resolve_all_alerts', { p_house: houseId });
+}
+export function deleteSupabaseAlertsAll(houseId: string) {
+  return callAlertRpc('delete_alerts_all', { p_house: houseId });
+}
+export function deleteSupabaseAlertsBefore(houseId: string, beforeIso: string) {
+  return callAlertRpc('delete_alerts_before', { p_house: houseId, p_before: beforeIso });
+}
+export async function countSupabaseAlerts(houseId: string, beforeIso?: string): Promise<number> {
+  if (!supabase) return 0;
+  let q = supabase.from('alerts').select('*', { count: 'exact', head: true }).eq('house_id', houseId);
+  if (beforeIso) q = q.lt('ts', beforeIso);
+  const { count, error } = await q;
+  return error ? 0 : count ?? 0;
+}
+
+// alert_config: อ่าน/แก้ toggle เปิด-ปิดการแจ้งเตือนต่อ code
+export async function fetchSupabaseAlertConfig(houseId: string): Promise<AlertConfigRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('alert_config').select('code,enabled').eq('house_id', houseId);
+  if (error || !data) return [];
+  return data.map((r) => ({ code: r.code, enabled: r.enabled }));
+}
+export async function setSupabaseAlertConfig(houseId: string, code: string, enabled: boolean): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase
+    .from('alert_config')
+    .upsert({ house_id: houseId, code, enabled }, { onConflict: 'house_id,code' });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 
 // subscribe alerts realtime — initial fetch + INSERT (แจ้งเตือนใหม่) + UPDATE (resolved_at เปลี่ยน)
