@@ -1,7 +1,8 @@
-import type { ActuatorKind, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, MappingSensor, SensorMetaRow } from './types';
+import type { ActuatorKind, AlertConfigRow, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, MappingSensor, SensorMetaRow } from './types';
 import {
   MOCK_SENSOR_META,
   buildMockAirHistory,
+  buildMockAlertConfig,
   buildMockAlerts,
   buildMockConfig,
   buildMockLatest,
@@ -12,8 +13,12 @@ import {
 import { SUPABASE_ENABLED } from './supabaseClient';
 import {
   assignSupabaseSensorRom,
+  countSupabaseAlerts,
   countSupabaseReadings,
+  deleteSupabaseAlertsAll,
+  deleteSupabaseAlertsBefore,
   fetchSupabaseAirHistory,
+  fetchSupabaseAlertConfig,
   fetchSupabaseAlerts,
   fetchSupabaseConfig,
   fetchSupabaseMappingSensors,
@@ -22,7 +27,9 @@ import {
   purgeSupabaseReadingsAll,
   purgeSupabaseReadingsBefore,
   resetSupabaseSensorRom,
+  resolveAllSupabaseAlerts,
   sendSupabaseCommand,
+  setSupabaseAlertConfig,
   updateSupabaseConfig,
 } from './supabaseData';
 import {
@@ -143,6 +150,32 @@ export function purgeReadingsBefore(houseId: string, beforeIso: string): Promise
 export function resetSensorRom(houseId: string = HOUSE_ID): Promise<{ ok: boolean; count?: number; message?: string }> {
   if (SUPABASE_ENABLED) return resetSupabaseSensorRom(houseId);
   return Promise.resolve({ ok: true, count: 3 });
+}
+
+// ---- จัดการ alert + config เปิด/ปิดการแจ้งเตือน: Supabase (ต้อง login) > mock (dev = ตอบสำเร็จ) ----
+export function resolveAllAlerts(houseId: string = HOUSE_ID): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (SUPABASE_ENABLED) return resolveAllSupabaseAlerts(houseId);
+  return Promise.resolve({ ok: true, count: 3 });
+}
+export function deleteAlertsAll(houseId: string = HOUSE_ID): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (SUPABASE_ENABLED) return deleteSupabaseAlertsAll(houseId);
+  return Promise.resolve({ ok: true, count: 22 });
+}
+export function deleteAlertsBefore(houseId: string, beforeIso: string): Promise<{ ok: boolean; count?: number; message?: string }> {
+  if (SUPABASE_ENABLED) return deleteSupabaseAlertsBefore(houseId, beforeIso);
+  return Promise.resolve({ ok: true, count: 10 });
+}
+export function countAlerts(houseId: string = HOUSE_ID, beforeIso?: string): Promise<number> {
+  if (SUPABASE_ENABLED) return countSupabaseAlerts(houseId, beforeIso);
+  return Promise.resolve(22);
+}
+export function fetchAlertConfig(houseId: string = HOUSE_ID): Promise<AlertConfigRow[]> {
+  if (SUPABASE_ENABLED) return fetchSupabaseAlertConfig(houseId);
+  return Promise.resolve(buildMockAlertConfig());
+}
+export function setAlertConfig(houseId: string, code: string, enabled: boolean): Promise<{ ok: boolean; message?: string }> {
+  if (SUPABASE_ENABLED) return setSupabaseAlertConfig(houseId, code, enabled);
+  return Promise.resolve({ ok: true });
 }
 
 export function fetchConfig(houseId: string = HOUSE_ID, profile?: string): Promise<ConfigResponse> {

@@ -151,7 +151,7 @@ export default function Page() {
 
       {tab === 'history' && <HistorySection houseId={houseId} />}
 
-      {tab === 'alerts' && <AlertsSection houseId={houseId} />}
+      {tab === 'alerts' && <AlertsSection houseId={houseId} canManage={canControl} />}
 
       {tab === 'settings' && (
         <div className="flex flex-col gap-4">
