@@ -1,50 +1,33 @@
 // ============================================================================
 // diag_rs485.cpp — เครื่องมือ diagnostic ชั่วคราว (ไม่ใช่ firmware ใช้งานจริง)
 //
-// จุดประสงค์: หาเซนเซอร์ T/RH บนบัส RS485/Modbus (XY-MD02 ฯลฯ) ที่ "ยังไม่เจอเลย"
+// จุดประสงค์: หาเซนเซอร์ T/RH บนบัส RS485/Modbus (XY-MD02) ที่ "ยังไม่เจอเลย"
 //
-// v2 (หลังเจอ "เงียบทุก address ทุก baud"): เพิ่ม 2 อย่างเพื่อฟันธงเคส "ไม่มีอะไรตอบเลย"
-//   1) Serial2.flush() ก่อนดึง DE/RE ลง — กันเฟรมถูกตัดกลางคัน (บั๊กคลาสสิก ESP32+ModbusMaster+MAX485
-//      ที่ทำให้ "เงียบสนิท" ทั้งที่สายถูก) — production rs485_sensors.cpp ก็ต้องแก้จุดนี้ถ้าเป็นเหตุ
-//   2) ลอง DE/RE 3 โหมดอัตโนมัติ: NORMAL (HIGH=TX), INVERTED (LOW=TX), AUTO (ไม่แตะขา)
-//      ครอบคลุมทั้งบอร์ด manual (ขั้วปกติ/สลับ) และบอร์ด auto-direction
+// v3 (บอร์ดแปลงเป็น auto-direction: ฝั่ง TTL มีแค่ GND/RXD/TXD/VCC ไม่มี DE/RE)
+//   → DE/RE ไม่เกี่ยว. ตัวแปรที่เหลือที่ firmware ทดสอบได้ = "ขา RX/TX สลับกันไหม" + baud
+//   ลองสลับขา RX↔TX ให้อัตโนมัติ (พี่ไม่ต้องขยับสาย) × baud — ถ้า TX/RX สลับ อีกแบบจะเจอทันที
+//   คง Serial2.flush() ไว้ (harmless กับ auto-direction)
 //
-// error code: OK / EXC (ตัวมีอยู่ register ผิด) / CRC (เพี้ยน) / TIMEOUT (เงียบ)
-// ยังเงียบหมดหลัง v2 → ปัญหาสายจริง 100%: A-B สลับ / ไฟเลี้ยงเซนเซอร์ / GND ร่วม / สาย TX-RX ที่ตัว
-//   transceiver / เซนเซอร์ไม่มีไฟ — ไม่ใช่ firmware
+// error: OK / EXC (ตัวมีอยู่ register ผิด) / CRC (เพี้ยน) / TIMEOUT (เงียบ)
+// ยังเงียบทั้ง 2 orientation ทุก baud → ปัญหาสายจริงล้วนๆ: A/B สลับ · ไฟเลี้ยงเซนเซอร์ ·
+//   VCC โมดูล · TX/RX จริงไม่ถึงโมดูล (ดู LED TXD/RXD บนบอร์ดว่ากะพริบไหมตอน scan)
 //
 // วิธีใช้:  py -m platformio run -e diag_rs485 -t upload   แล้ว   ... device monitor -e diag_rs485
-// pin = config.h (RS485_*): RX=16 TX=17 DE_RE=4 baud=9600
 // ============================================================================
 #include <Arduino.h>
 #include <ModbusMaster.h>
 
-static constexpr int RX_PIN    = 16;   // = RS485_RX_PIN
-static constexpr int TX_PIN    = 17;   // = RS485_TX_PIN
-static constexpr int DE_RE_PIN = 4;    // = RS485_DE_RE_PIN
-static constexpr uint8_t ADDR_MAX  = 6;
-static constexpr uint16_t REG_TRH  = 0x0001;
+static constexpr int PIN_A = 16;   // = RS485_RX_PIN (ESP32 RX)
+static constexpr int PIN_B = 17;   // = RS485_TX_PIN (ESP32 TX)
+static constexpr int DE_RE_PIN = 4;
+static constexpr uint8_t ADDR_MAX = 4;
+static constexpr uint16_t REG_TRH = 0x0001;
 
 static ModbusMaster node;
 
-// โหมดคุมทิศ DE/RE ที่กำลังทดสอบ (ตั้งก่อน probe แต่ละรอบ)
-enum DeMode { DE_NORMAL, DE_INVERTED, DE_AUTO };
-static DeMode g_de = DE_NORMAL;
-
-static void preTx() {
-  if (g_de == DE_NORMAL)        digitalWrite(DE_RE_PIN, HIGH);   // HIGH = ส่ง (MAX485 ปกติ)
-  else if (g_de == DE_INVERTED) digitalWrite(DE_RE_PIN, LOW);
-  // DE_AUTO: ไม่แตะขา (บอร์ด auto-direction คุมเอง)
-}
-static void postTx() {
-  Serial2.flush();   // ⚠️ สำคัญ: รอ UART ส่งครบทุกไบต์ ก่อนสลับกลับเป็นรับ (กันเฟรมขาด)
-  if (g_de == DE_NORMAL)        digitalWrite(DE_RE_PIN, LOW);
-  else if (g_de == DE_INVERTED) digitalWrite(DE_RE_PIN, HIGH);
-}
-
-static const char *deName(DeMode m) {
-  return m == DE_NORMAL ? "DE=ปกติ" : m == DE_INVERTED ? "DE=สลับ" : "DE=auto";
-}
+// โมดูล auto-direction: flush ก่อนปล่อย (กันเฟรมขาด) แต่ไม่ต้องคุมทิศ (บอร์ดทำเอง)
+static void preTx()  {}
+static void postTx() { Serial2.flush(); }
 
 static const char *errName(uint8_t e) {
   switch (e) {
@@ -74,14 +57,12 @@ static uint8_t probe(uint8_t addr, const char *&func, float &temp, float &rh) {
   return r;
 }
 
-// สแกน address 1..ADDR_MAX ที่ baud+โหมด DE/RE ปัจจุบัน — คืนจำนวนที่ตอบ (ไม่ timeout)
-static int sweep(uint32_t baud, DeMode de) {
-  g_de = de;
+// sweep addr ที่ pin orientation (rxPin,txPin) + baud ที่กำหนด
+static int sweep(int rxPin, int txPin, uint32_t baud) {
   Serial2.end();
-  Serial2.begin(baud, SERIAL_8N1, RX_PIN, TX_PIN);
-  if (de != DE_AUTO) digitalWrite(DE_RE_PIN, de == DE_NORMAL ? LOW : HIGH);   // เริ่มที่โหมดรับ
+  Serial2.begin(baud, SERIAL_8N1, rxPin, txPin);
   delay(40);
-  Serial.printf("  -- baud %lu · %s --\n", (unsigned long)baud, deName(de));
+  Serial.printf("  -- RX=GPIO%d TX=GPIO%d · baud %lu --\n", rxPin, txPin, (unsigned long)baud);
   int hits = 0;
   for (uint8_t addr = 1; addr <= ADDR_MAX; addr++) {
     const char *func = ""; float temp = NAN, rh = NAN;
@@ -108,9 +89,10 @@ void setup() {
   node.postTransmission(postTx);
   Serial.println();
   Serial.println("================================================================");
-  Serial.println("  RS485/Modbus DIAGNOSTIC v2 (ชั่วคราว — flush + ลอง DE/RE 3 โหมด)");
-  Serial.printf ("  RX=%d TX=%d DE_RE=%d  ·  addr 1..%d\n", RX_PIN, TX_PIN, DE_RE_PIN, ADDR_MAX);
-  Serial.println("  ยังเงียบหมดหลัง v2 = ปัญหาสายจริง (A-B สลับ / ไฟเซนเซอร์ / GND / TX-RX ที่ transceiver)");
+  Serial.println("  RS485 DIAGNOSTIC v3 (auto-direction) — ลองสลับขา RX/TX อัตโนมัติ");
+  Serial.println("  👀 ดู LED บนบอร์ด RS485 ตอน scan: TXD ควรกะพริบ (ESP ส่งออก)");
+  Serial.println("     TXD ไม่กะพริบเลย = ESP→โมดูลไม่ถึง (สาย TX/VCC โมดูล)");
+  Serial.println("     TXD กะพริบ แต่ RXD เงียบ = ส่งออกได้ แต่เซนเซอร์ไม่ตอบ (A/B สลับ/ไฟเซนเซอร์)");
   Serial.println("================================================================");
 }
 
@@ -118,14 +100,13 @@ void loop() {
   pass++;
   Serial.printf("\n=============== pass #%lu ===============\n", (unsigned long)pass);
   int total = 0;
-  // baud 9600 (ค่าจริง): ลองครบ 3 โหมด DE/RE เพื่อฟันธงเรื่องทิศ
-  total += sweep(9600, DE_NORMAL);
-  total += sweep(9600, DE_INVERTED);
-  total += sweep(9600, DE_AUTO);
-  // baud อื่น: เช็คซ้ำเฉพาะโหมดปกติ (เผื่อ sensor ตั้ง baud อื่น)
-  total += sweep(4800, DE_NORMAL);
-  total += sweep(19200, DE_NORMAL);
+  const uint32_t bauds[] = {9600, 4800, 19200};
+  // orientation ปกติ (RX=16 TX=17)
+  for (uint32_t b : bauds) total += sweep(PIN_A, PIN_B, b);
+  // orientation สลับ (RX=17 TX=16) — เผื่อ TXD/RXD บนโมดูลสลับกัน
+  for (uint32_t b : bauds) total += sweep(PIN_B, PIN_A, b);
   Serial.printf("[สรุป pass #%lu] ตอบรวม %d รายการ%s\n", (unsigned long)pass, total,
-                total == 0 ? " — ยังเงียบ = ปัญหาสายจริง (ไม่ใช่ firmware)" : " <- เจอแล้ว! ดูบรรทัด OK/EXC");
+                total == 0 ? " — เงียบทั้ง 2 orientation = ปัญหาสายจริง (A/B, ไฟเซนเซอร์, VCC โมดูล)"
+                           : " <- เจอแล้ว! ดูบรรทัด RX/TX ที่ OK");
   delay(1500);
 }
