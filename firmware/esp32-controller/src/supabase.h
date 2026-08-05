@@ -22,6 +22,12 @@ bool supabase_post_event(const char *actuator_kind, bool state, const char *reas
 // insert alert
 bool supabase_post_alert(const char *code, const char *severity, const char *message);
 
+// อ่านตาราง alert_config (เปิด/ปิดการแจ้งเตือนต่อ code) มา cache — เรียกเป็นระยะเมื่อมีเน็ต
+bool supabase_fetch_alert_config();
+// code นี้เปิดแจ้งเตือนอยู่ไหม (default true ถ้ายังไม่โหลด/ไม่รู้จัก — fail-safe ไม่พลาด alert)
+// ⚠️ คุมแค่ "การแจ้งเตือน" — safety interlock ใน control/safety ไม่ขึ้นกับค่านี้
+bool supabase_alert_enabled(const char *code);
+
 // upsert live ROM ที่เจอบนบัส 1-Wire ลงตาราง bed_scan (on_conflict house_id,rom_id) ให้หน้า
 // Maintenance จับคู่ ROM↔ตำแหน่ง — ไม่ต้องรอ resolve ids (keyed ด้วย house_id+rom_id ไม่ใช่ sensor_id)
 bool supabase_post_bed_scan(const char roms[][17], const float temps[], int n);

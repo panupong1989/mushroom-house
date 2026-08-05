@@ -27,7 +27,7 @@ static ActuatorState prev_act{};
 static bool prev_act_valid = false;
 static char prev_alert[24] = {0};
 
-static uint32_t t_ctrl = 0, t_readings = 0, t_poll = 0, t_hb = 0, t_resolve = 0, t_scan = 0;
+static uint32_t t_ctrl = 0, t_readings = 0, t_poll = 0, t_hb = 0, t_resolve = 0, t_scan = 0, t_alertcfg = 0;
 
 static bool read_float_water() { return digitalRead(FLOAT_PIN) == HIGH; } // ปรับตามการต่อ
 
@@ -129,7 +129,13 @@ void loop() {
   // resolve sensor/actuator ids ครั้งเดียวเมื่อมีเน็ต (retry ทุก 10s จนสำเร็จ)
   if (net_online() && !supabase_ids_ready() && now - t_resolve >= 10000) {
     t_resolve = now;
-    supabase_resolve_ids();
+    if (supabase_resolve_ids()) supabase_fetch_alert_config();   // โหลด config แจ้งเตือนครั้งแรกทันทีที่พร้อม
+  }
+
+  // refresh alert_config ทุก 60s (ผู้ใช้ toggle เปิด/ปิดแจ้งเตือนจาก dashboard ได้ระหว่างทาง)
+  if (net_online() && now - t_alertcfg >= 60000) {
+    t_alertcfg = now;
+    supabase_fetch_alert_config();
   }
 
   // ---- control loop (edge-autonomous ทุก CONTROL_PERIOD_MS ไม่ว่าโหมดไหน/เน็ตมีหรือไม่) ----
@@ -142,10 +148,11 @@ void loop() {
     char alert[24];
     bool trip = safety_check(s, control_get_setpoints(), alert, sizeof(alert));
     if (trip) {
-      control_set_mode(M_SAFE_HOLD);
+      control_set_mode(M_SAFE_HOLD);   // ⚠️ SAFE_HOLD + interlock ทำงานเสมอ ไม่ขึ้นกับ alert_config
       if (strcmp(prev_alert, alert) != 0) {         // post alert ครั้งเดียวต่อการ trip (กัน spam)
         strncpy(prev_alert, alert, sizeof(prev_alert) - 1);
-        supabase_post_alert(alert, "critical", "");
+        // โพสต์ alert เฉพาะ code ที่เปิดแจ้งเตือนไว้ (dashboard toggle) — code ที่ปิด = เงียบ แต่ระบบยังกันพัง
+        if (supabase_alert_enabled(alert)) supabase_post_alert(alert, "critical", "");
       }
     } else {
       if (control_mode() == M_SAFE_HOLD) control_set_mode(M_FRUITING);
