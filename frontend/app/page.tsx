@@ -15,6 +15,7 @@ import { HistorySection } from '@/components/HistorySection';
 import { AlertsSection } from '@/components/AlertsSection';
 import { LoginPanel } from '@/components/LoginPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { MaintenancePanel } from '@/components/MaintenancePanel';
 import { TabNav, type TabKey } from '@/components/TabNav';
 import { ToastStack, type Toast } from '@/components/ToastStack';
 import { useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
@@ -153,15 +154,18 @@ export default function Page() {
       {tab === 'alerts' && <AlertsSection houseId={houseId} />}
 
       {tab === 'settings' && (
-        <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 md:items-start">
-          {SUPABASE_ENABLED && <LoginPanel session={session} />}
-          {canControl ? (
-            <SettingsPanel houseId={houseId} />
-          ) : (
-            <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
-              🔒 เข้าสู่ระบบด้านบนก่อนเพื่อแก้ setpoint
-            </div>
-          )}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 md:items-start">
+            {SUPABASE_ENABLED && <LoginPanel session={session} />}
+            {canControl ? (
+              <SettingsPanel houseId={houseId} />
+            ) : (
+              <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
+                🔒 เข้าสู่ระบบด้านบนก่อนเพื่อแก้ setpoint
+              </div>
+            )}
+          </div>
+          {canControl && <MaintenancePanel houseId={houseId} telemetry={telemetry} mode={latest?.mode ?? null} />}
         </div>
       )}
 

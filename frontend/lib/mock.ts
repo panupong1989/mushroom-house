@@ -8,11 +8,13 @@ import type {
   ActuatorKind,
   ActuatorStateRow,
   AlertRow,
+  BedScanRow,
   CommandAction,
   CommandResult,
   ConfigResponse,
   FsmMode,
   LatestResponse,
+  MappingSensor,
   SensorMetaRow,
   SensorReadingRow,
 } from './types';
@@ -307,4 +309,32 @@ export async function mockSendActuatorCommand(kind: ActuatorKind, action: Comman
   }
 
   return { status: 'ok' };
+}
+
+// ---- โหมด mock หน้า Maintenance (ให้เห็นหน้าตา live-mapping ตอน dev/preview ไม่มี Supabase) ----
+// 7 ROM ปลอม (คล้ายผล diag จริง) — 3 ตัวแรก "จับคู่แล้ว" (rom_id ตรง MOCK_MAPPING) ที่เหลือยังว่าง
+const MOCK_ROMS = [
+  '28C066B400000093', '28F4D8BA0000005A', '28DC8AB200000047',
+  '283C58B4000000BA', '28B2D5B1000000E5', '28F1A3B900000024', '28F35DB4000000D3',
+];
+
+export function buildMockBedScan(nowMs: number = Date.now()): BedScanRow[] {
+  const iso = new Date(nowMs).toISOString();
+  return MOCK_ROMS.map((romId, i) => ({ romId, tempC: round1(31 + Math.sin(i) * 0.8), updatedAt: iso }));
+}
+
+// 7 ตำแหน่ง (6 bed + 1 outside) ตรงกับ address ใน supabase/migrations/005 — 3 ตัวแรก map ไว้แล้ว
+export function buildMockMappingSensors(): MappingSensor[] {
+  const positions: { kind: string; address: string }[] = [
+    { kind: 'bed_temp', address: 'row1_head_top' },
+    { kind: 'bed_temp', address: 'row1_mid_mid' },
+    { kind: 'bed_temp', address: 'row1_tail_bottom' },
+    { kind: 'bed_temp', address: 'row2_head_top' },
+    { kind: 'bed_temp', address: 'row2_mid_mid' },
+    { kind: 'bed_temp', address: 'row2_tail_bottom' },
+    { kind: 'outside_temp', address: 'outside' },
+  ];
+  return positions.map((p, i) => ({ id: 100 + i, kind: p.kind, address: p.address, romId: MOCK_ROMS[i] ?? null })).map(
+    (s, i) => ({ ...s, romId: i < 3 ? s.romId : null }) // เฉพาะ 3 ตัวแรกจับคู่แล้ว
+  );
 }
