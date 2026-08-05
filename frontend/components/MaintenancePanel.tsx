@@ -6,11 +6,15 @@ import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { useBedScan, useNow } from '@/lib/hooks';
 import {
   assignSensorRom,
+  countAlerts,
   countReadings,
+  deleteAlertsAll,
+  deleteAlertsBefore,
   fetchMappingSensors,
   purgeReadingsAll,
   purgeReadingsBefore,
   resetSensorRom,
+  resolveAllAlerts,
 } from '@/lib/api';
 import { BED_POSITIONS, duplicatePositions, pendingChanges, positionLabel, shortRom } from '@/lib/maintenance';
 import { endOfDayMs } from '@/lib/history';
@@ -47,6 +51,7 @@ export function MaintenancePanel({
   const [status, setStatus] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
 
   const [beforeDate, setBeforeDate] = useState('');
+  const [alertBeforeDate, setAlertBeforeDate] = useState('');
   const [pending, setPending] = useState<PendingDelete | null>(null);
   const [deleting, setDeleting] = useState(false);
   // ผลการลบ แสดงในการ์ด "เคลียร์ข้อมูล" ตรงที่ผู้ใช้กด (ไม่ใช่ status การจับคู่ที่อยู่ไกลด้านบน)
@@ -141,6 +146,36 @@ export function MaintenancePanel({
       count: mappedCount,
       run: () => resetSensorRom(houseId),
     });
+  }
+
+  // เคลียร์ประวัติแจ้งเตือน (ย้ายมารวมที่นี่ตามคำขอ) — resolve = mark หายแล้ว (ไม่ลบ), delete = ลบถาวร
+  async function doResolveAlerts() {
+    setDeleteMsg(null);
+    setDeleting(true);
+    const res = await resolveAllAlerts(houseId);
+    setDeleting(false);
+    setDeleteMsg(
+      res.ok
+        ? { kind: 'ok', msg: `✅ เคลียร์แจ้งเตือนแล้ว ${res.count?.toLocaleString() ?? 0} รายการ (mark หายแล้ว)` }
+        : { kind: 'err', msg: `❌ เคลียร์ไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่'}` }
+    );
+  }
+
+  async function openPurgeAlerts(kind: 'all' | 'before') {
+    setDeleteMsg(null);
+    if (kind === 'before' && !alertBeforeDate) {
+      setDeleteMsg({ kind: 'err', msg: 'เลือกวันก่อนกดลบแจ้งเตือนก่อนวันที่' });
+      return;
+    }
+    const beforeIso = kind === 'before' ? new Date(endOfDayMs(alertBeforeDate)).toISOString() : undefined;
+    setPending({
+      title: kind === 'all' ? 'ลบการแจ้งเตือนทั้งหมด' : `ลบการแจ้งเตือนก่อน ${alertBeforeDate}`,
+      description: kind === 'all' ? 'ลบ alert ทั้งหมดของโรงนี้ถาวร' : `ลบ alert ที่เก่ากว่า ${alertBeforeDate} 23:59 ถาวร`,
+      count: null,
+      run: () => (kind === 'all' ? deleteAlertsAll(houseId) : deleteAlertsBefore(houseId, beforeIso as string)),
+    });
+    const n = await countAlerts(houseId, beforeIso);
+    setPending((p) => (p ? { ...p, count: n } : p));
   }
 
   const rs485Count = telemetry.air.filter((p) => p.temp != null).length;
@@ -274,6 +309,40 @@ export function MaintenancePanel({
           >
             ลบ mapping เซนเซอร์ <span className="text-[11px] font-normal">(รีเซ็ต rom_id ทั้งหมด)</span>
           </button>
+
+          {/* ---- ประวัติการแจ้งเตือน (ย้ายมารวมที่นี่) ---- */}
+          <p className="mt-1 text-[11px] font-medium text-gray-400">ประวัติการแจ้งเตือน</p>
+          <button
+            onClick={doResolveAlerts}
+            disabled={deleting}
+            className="rounded-xl2 border border-gray-200 bg-bg px-3 py-2 text-left text-sm font-medium text-gray-600 disabled:opacity-40"
+          >
+            เคลียร์แจ้งเตือนทั้งหมด <span className="text-[11px] font-normal">(mark หายแล้ว — เก็บประวัติ)</span>
+          </button>
+          <button
+            onClick={() => openPurgeAlerts('all')}
+            className="rounded-xl2 border border-danger/40 bg-danger/5 px-3 py-2 text-left text-sm font-medium text-danger"
+          >
+            ลบแจ้งเตือนทั้งหมด <span className="text-[11px] font-normal">(ลบถาวร)</span>
+          </button>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl2 border border-danger/40 bg-danger/5 px-3 py-2">
+            <span className="text-sm font-medium text-danger">ลบแจ้งเตือนก่อนวันที่</span>
+            <input
+              type="date"
+              value={alertBeforeDate}
+              max={now ? new Date(now).toISOString().slice(0, 10) : undefined}
+              onChange={(e) => setAlertBeforeDate(e.target.value)}
+              className="rounded-xl2 border border-gray-200 bg-card px-2 py-1 text-xs text-gray-700"
+              aria-label="ลบแจ้งเตือนก่อนวันที่"
+            />
+            <button
+              onClick={() => openPurgeAlerts('before')}
+              disabled={!alertBeforeDate}
+              className="ml-auto rounded-xl2 bg-danger px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+            >
+              ลบ
+            </button>
+          </div>
         </div>
 
         {/* ผลการลบ — โชว์ตรงนี้ (ที่ผู้ใช้กด) หลัง dialog ปิด */}
