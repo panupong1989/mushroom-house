@@ -5,7 +5,9 @@
 static ModbusMaster node;
 
 static void preTx()  { if (RS485_DE_RE_PIN >= 0) digitalWrite(RS485_DE_RE_PIN, HIGH); }
-static void postTx() { if (RS485_DE_RE_PIN >= 0) digitalWrite(RS485_DE_RE_PIN, LOW);  }
+// flush() รอ UART ส่งครบทุกไบต์ก่อนปล่อย (กันเฟรมขาดตอนสลับเป็นรับ) — สำคัญกับบอร์ด manual DE/RE
+// และไม่มีผลเสียกับ auto-direction; ทำเสมอไม่ว่าจะคุมทิศหรือไม่
+static void postTx() { Serial2.flush(); if (RS485_DE_RE_PIN >= 0) digitalWrite(RS485_DE_RE_PIN, LOW); }
 
 void rs485_begin() {
   if (RS485_DE_RE_PIN >= 0) { pinMode(RS485_DE_RE_PIN, OUTPUT); digitalWrite(RS485_DE_RE_PIN, LOW); }
