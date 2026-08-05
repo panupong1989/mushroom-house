@@ -27,7 +27,7 @@ function fmtTime(ms: number, spanMs: number): string {
 }
 
 export function MultiLineChart({
-  series,
+  series: allSeries,
   domainMin,
   domainMax,
   primaryUnit,
@@ -45,6 +45,9 @@ export function MultiLineChart({
   secondaryDigits?: number;
   height?: number;
 }) {
+  // ซ่อนเส้นที่ "ไม่มีข้อมูลเลย" (เช่น เซนเซอร์ผีที่ค้างใน DB — air_th 'mid' ที่ไม่มีจริง)
+  // ไม่ให้รก legend + เส้น · เหลือเฉพาะจุดที่มีค่าจริง
+  const series = allSeries.filter((s) => s.points.length > 0);
   const primary = series.filter((s) => (s.axis ?? 'primary') === 'primary');
   const secondary = series.filter((s) => s.axis === 'secondary');
   const primaryBounds = seriesBounds(primary.flatMap((s) => s.points), primaryUnit === '%' ? 2 : 0.5);
