@@ -52,3 +52,21 @@ int onewire_scan_all(char roms[][17], float temps[], int maxN) {
   }
   return n;
 }
+
+// อ่านทุกตัวลง out[] (rom+temp+ok) — read_sensors ใช้ป้อน control/safety (โพสต์ตาม rom_id + คิด bed_temp_max)
+void onewire_read_all(BedReading out[], int maxN, int &n_out) {
+  sensors.requestTemperatures();
+  int count = sensors.getDeviceCount();
+  int n = 0;
+  for (int i = 0; i < count && n < maxN; i++) {
+    DeviceAddress addr;
+    if (!sensors.getAddress(addr, i)) continue;
+    rom_to_str(addr, out[n].rom, sizeof(out[n].rom));
+    float t = sensors.getTempC(addr);
+    bool ok = (t != DEVICE_DISCONNECTED_C);
+    out[n].ok = ok;
+    out[n].temp = ok ? t : NAN;
+    n++;
+  }
+  n_out = n;
+}

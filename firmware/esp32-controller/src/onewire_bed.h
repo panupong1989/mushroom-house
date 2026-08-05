@@ -15,3 +15,7 @@ void onewire_bed_read(BedReading out[3], float &bed_temp_max);
 // ลง roms[i] และอุณหภูมิลง temps[i] (NAN ถ้าอ่านไม่ได้) คืนจำนวนที่เจอ (<= maxN)
 // ⚠️ diagnostic/mapping เท่านั้น — ไม่ป้อน control/safety (bed_temp_max ยังมาจาก onewire_bed_read)
 int onewire_scan_all(char roms[][17], float temps[], int maxN);
+
+// อ่าน DS18B20 ทุกตัวบนบัสลง out[] (rom+temp+ok) สำหรับ read_sensors — เติม n_out = จำนวนที่เจอ (<= maxN)
+// bed_temp_max คำนวณจากผลนี้ (กัน outside ออกใน main.cpp) — ป้อน control/safety
+void onewire_read_all(BedReading out[], int maxN, int &n_out);
