@@ -57,4 +57,6 @@ export const MODE_LABELS: Record<FsmMode, string> = {
 export const MANUAL_TTL_SEC = 3600;
 export const MANUAL_REFRESH_MS = 4 * 60 * 1000; // ต่ออายุทุก 4 นาที (< 60 นาที กัน TTL หมด)
 export const POLL_INTERVAL_MS = 4000;
-export const OFFLINE_THRESHOLD_MS = 30_000; // ไม่มีข้อมูลใหม่เกิน 30s ถือว่าออฟไลน์
+// firmware ส่ง sensor_readings ทุก ~20s (READINGS_POST_PERIOD_MS) — เผื่อ 90s (~4 รอบ)
+// กันขึ้น "ออฟไลน์" กระพริบตอน post คลาดนิดหน่อย/WiFi สะดุดสั้นๆ (เดิม 30s แน่นเกินไป)
+export const OFFLINE_THRESHOLD_MS = 90_000;
