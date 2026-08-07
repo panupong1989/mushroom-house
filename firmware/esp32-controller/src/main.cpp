@@ -25,7 +25,6 @@ static SensorSnapshot last_snap;
 static bool have_snap = false;
 static ActuatorState prev_act{};
 static bool prev_act_valid = false;
-static char prev_alert[24] = {0};
 
 static uint32_t t_ctrl = 0, t_readings = 0, t_poll = 0, t_hb = 0, t_resolve = 0, t_scan = 0, t_alertcfg = 0;
 
@@ -84,6 +83,39 @@ static void persist_events(const ActuatorState &cur) {
   if (cur.light       != prev_act.light)       supabase_post_event("light", cur.light, "", src);
   if (cur.circulation != prev_act.circulation) supabase_post_event("circulation", cur.circulation, "", src);
   prev_act = cur;
+}
+
+// ---- notify-layer: โพสต์ alert ตาม "เกณฑ์" ใน alert_config (แยกจาก safety trip) ----
+// ⚠️ นี่คือ "การแจ้งเตือน" ล้วนๆ — ไม่ trip SAFE_HOLD / ไม่คุม relay (safety_check จัดการ interlock แยก)
+//    RH นอกช่วง = warn (แจ้งอย่างเดียว) · น้ำต่ำ/กองร้อน/อากาศร้อน = critical
+// โพสต์ตอน "ข้ามเกณฑ์" (ขอบขาขึ้น) กัน spam · เคารพ toggle เปิด/ปิด · ค่าเกณฑ์จาก alert_config
+//    ถ้ายังไม่โหลด (NAN) fallback เป็น setpoint (คงพฤติกรรมเดิม ไม่พลาด alert วิกฤต)
+static bool alert_active[5] = { false, false, false, false, false };
+static void notify_check(const SensorSnapshot &s, const Setpoints &sp) {
+  if (!net_online() || !supabase_ids_ready()) return;   // โพสต์ต้องมีเน็ต + resolve ids แล้ว
+  float thHot  = supabase_alert_threshold("HOT");          if (isnan(thHot))  thHot  = sp.temp_danger_hot;
+  float thBed  = supabase_alert_threshold("BED_OVERHEAT"); if (isnan(thBed))  thBed  = sp.bed_danger;
+  float thRhHi = supabase_alert_threshold("RH_HIGH");      if (isnan(thRhHi)) thRhHi = sp.rh_max;
+  float thRhLo = supabase_alert_threshold("RH_LOW");       if (isnan(thRhLo)) thRhLo = sp.rh_min;
+
+  struct Chk { const char *code; bool cond; const char *sev; };
+  const Chk chk[5] = {
+    { "LOW_WATER",    !s.water_ok,                                          "critical" },
+    { "HOT",          !isnan(s.air_temp_ctrl) && s.air_temp_ctrl >= thHot,  "critical" },
+    { "BED_OVERHEAT", !isnan(s.bed_temp_max)  && s.bed_temp_max  >= thBed,  "critical" },
+    { "RH_HIGH",      !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    > thRhHi, "warn" },
+    { "RH_LOW",       !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    < thRhLo, "warn" },
+  };
+  for (int i = 0; i < 5; i++) {
+    if (chk[i].cond) {
+      if (!alert_active[i]) {                             // ขอบขาขึ้น — เพิ่งข้ามเกณฑ์
+        alert_active[i] = true;
+        if (supabase_alert_enabled(chk[i].code)) supabase_post_alert(chk[i].code, chk[i].sev, "");
+      }
+    } else {
+      alert_active[i] = false;                            // กลับเข้าช่วงปกติ → รีเซ็ต (ข้ามใหม่ค่อยโพสต์อีก)
+    }
+  }
 }
 
 // เตือนตอน boot ถ้า secrets.h ยังเป็นค่า placeholder — จะต่อ WiFi/Supabase ไม่ได้ (persist ขึ้น Supabase ไม่ได้)
@@ -158,17 +190,13 @@ void loop() {
     char alert[24];
     bool trip = safety_check(s, control_get_setpoints(), alert, sizeof(alert));
     if (trip) {
-      control_set_mode(M_SAFE_HOLD);   // ⚠️ SAFE_HOLD + interlock ทำงานเสมอ ไม่ขึ้นกับ alert_config
-      if (strcmp(prev_alert, alert) != 0) {         // post alert ครั้งเดียวต่อการ trip (กัน spam)
-        strncpy(prev_alert, alert, sizeof(prev_alert) - 1);
-        // โพสต์ alert เฉพาะ code ที่เปิดแจ้งเตือนไว้ (dashboard toggle) — code ที่ปิด = เงียบ แต่ระบบยังกันพัง
-        if (supabase_alert_enabled(alert)) supabase_post_alert(alert, "critical", "");
-      }
+      control_set_mode(M_SAFE_HOLD);   // ⚠️ SAFE_HOLD + interlock relay จัดการใน safety_check เสมอ (กันพัง)
     } else {
       if (control_mode() == M_SAFE_HOLD) control_set_mode(M_FRUITING);
-      prev_alert[0] = 0;
       control_step(s);
     }
+    // การแจ้งเตือน (คนละชั้นกับ trip) — โพสต์ alert ตามเกณฑ์ alert_config รวมความชื้นนอกช่วง (แจ้งอย่างเดียว)
+    notify_check(s, control_get_setpoints());
 
     // คำสั่งจากปุ่ม local web (ถ้ามี) — execute ใน task หลัก (เคารพ interlock)
     char a[16], ac[8]; uint32_t ttl;
