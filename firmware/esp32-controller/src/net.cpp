@@ -8,6 +8,10 @@ static bool ntp_started = false;
 
 void net_begin() {
   WiFi.mode(WIFI_STA);
+  // ปิด modem-sleep (power-save) — ตัวการหลักที่ ESP32 หลุดๆติดๆ / โดน AP เตะ ทั้งที่สัญญาณแรง
+  // control loop + safety เป็น edge-autonomous อยู่แล้ว แต่การปิด sleep ทำให้ dashboard นิ่งขึ้นมาก
+  WiFi.setSleep(false);
+  WiFi.persistent(false);   // ไม่เขียน creds ลง flash ทุก begin (ลด wear + กัน auto-connect creds เก่าตอน boot)
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   // NTP — ต้องมีเวลาจริงเพื่อเขียน commands.acked_at เป็น ISO8601 (sensor_readings.ts ใช้ default now() ฝั่ง DB ได้)
