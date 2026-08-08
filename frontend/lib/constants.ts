@@ -60,3 +60,8 @@ export const POLL_INTERVAL_MS = 4000;
 // firmware ส่ง sensor_readings ทุก ~20s (READINGS_POST_PERIOD_MS) — เผื่อ 90s (~4 รอบ)
 // กันขึ้น "ออฟไลน์" กระพริบตอน post คลาดนิดหน่อย/WiFi สะดุดสั้นๆ (เดิม 30s แน่นเกินไป)
 export const OFFLINE_THRESHOLD_MS = 90_000;
+// ตาข่ายกันพลาดของ realtime: ดึงค่าล่าสุดซ้ำทุก 30 วิ (< OFFLINE_THRESHOLD_MS) เผื่อ WebSocket
+// หลุด/หลับแล้ว postgres_changes หายไปเงียบๆ — ไม่งั้น dashboard ค้างแล้วขึ้น "ออฟไลน์" ทั้งที่บอร์ดยิงอยู่
+export const LATEST_REFRESH_MS = 30_000;
+// live scan (bed_scan) ต้องสดกว่า — ESP32 push ทุก ~5 วิ และหน้าจับคู่ตัดสินจาก "ค่าพุ่ง" ตอนกำเซนเซอร์
+export const BED_SCAN_REFRESH_MS = 5_000;

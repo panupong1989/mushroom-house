@@ -3,6 +3,7 @@
 // lib/interlock.ts และ component เดิมใช้ต่อได้ทันทีโดยไม่ต้องแก้
 import { supabase } from './supabaseClient';
 import { RANGE_MS, RANGE_META, type AirHistory, type HistoryRange, type Point, type RangeKey, type SensorSeriesRow } from './history';
+import { BED_SCAN_REFRESH_MS, LATEST_REFRESH_MS } from './constants';
 import type {
   ActuatorKind,
   ActuatorStateRow,
@@ -79,17 +80,18 @@ export function subscribeSupabaseLatest(
     });
   }
 
-  async function init() {
-    const [sensorsRes, actuatorsRes, houseRes] = await Promise.all([
+  let metaReady = false;
+  let loadedOnce = false;
+  let refreshing = false;
+
+  // metadata (sensors/actuators) เปลี่ยนแทบไม่เลย — โหลดครั้งเดียวแล้ว cache ไว้
+  async function loadMeta(): Promise<boolean> {
+    const [sensorsRes, actuatorsRes] = await Promise.all([
       client.from('sensors').select('id,kind,location,row_no').eq('house_id', houseId),
       client.from('actuators').select('id,kind').eq('house_id', houseId),
-      client.from('houses').select('last_mode,last_mode_ts').eq('id', houseId).maybeSingle(),
     ]);
-    if (cancelled) return;
-    if (sensorsRes.error || actuatorsRes.error || houseRes.error) {
-      onError('เชื่อมต่อ Supabase ไม่ได้ — ตรวจสอบ NEXT_PUBLIC_SUPABASE_URL/ANON_KEY และ RLS');
-      return;
-    }
+    if (cancelled) return false;
+    if (sensorsRes.error || actuatorsRes.error) return false;
 
     for (const s of sensorsRes.data ?? []) {
       sensorMeta.set(s.id, { kind: s.kind, location: s.location, rowNo: s.row_no ?? null });
@@ -100,10 +102,13 @@ export function subscribeSupabaseLatest(
       }
     }
     for (const a of actuatorsRes.data ?? []) actuatorMeta.set(a.id, a.kind as ActuatorKind);
-    mode = (houseRes.data?.last_mode as FsmMode | null) ?? null;
-    modeTs = houseRes.data?.last_mode_ts ?? null;
+    return true;
+  }
 
-    const [readingsRes, eventsRes] = await Promise.all([
+  // ค่าล่าสุด — เรียกได้ซ้ำ (initial load / poll กันพลาด / realtime กลับมาต่อ / กลับมาเปิดแท็บ)
+  // upsert* เทียบ ts ก่อนทับอยู่แล้ว จึงปลอดภัยที่จะดึงซ้อนกับ event realtime
+  async function loadLatest(): Promise<boolean> {
+    const [readingsRes, eventsRes, houseRes] = await Promise.all([
       client
         .from('sensor_readings')
         .select('id,sensor_id,ts,metric,value')
@@ -116,12 +121,13 @@ export function subscribeSupabaseLatest(
         .eq('house_id', houseId)
         .order('ts', { ascending: false })
         .limit(EVENT_HISTORY_LIMIT),
+      client.from('houses').select('last_mode,last_mode_ts').eq('id', houseId).maybeSingle(),
     ]);
-    if (cancelled) return;
-    if (readingsRes.error || eventsRes.error) {
-      onError('เชื่อมต่อ Supabase ไม่ได้ — ตรวจสอบ NEXT_PUBLIC_SUPABASE_URL/ANON_KEY และ RLS');
-      return;
-    }
+    if (cancelled) return false;
+    if (readingsRes.error || eventsRes.error || houseRes.error) return false;
+
+    mode = (houseRes.data?.last_mode as FsmMode | null) ?? null;
+    modeTs = houseRes.data?.last_mode_ts ?? null;
 
     for (const row of readingsRes.data ?? []) {
       const meta = sensorMeta.get(row.sensor_id);
@@ -144,9 +150,37 @@ export function subscribeSupabaseLatest(
     }
 
     emit();
+    return true;
   }
 
-  init();
+  async function refresh() {
+    if (cancelled || refreshing) return;
+    refreshing = true;
+    try {
+      if (!metaReady) metaReady = await loadMeta();
+      const ok = metaReady && (await loadLatest());
+      if (cancelled) return;
+      if (ok) loadedOnce = true;
+      // poll ที่พลาดชั่วคราวไม่ต้องขึ้น error ทับข้อมูลดีที่มีอยู่ — เตือนเฉพาะตอนยังโหลดไม่สำเร็จสักครั้ง
+      else if (!loadedOnce) {
+        onError('เชื่อมต่อ Supabase ไม่ได้ — ตรวจสอบ NEXT_PUBLIC_SUPABASE_URL/ANON_KEY และ RLS');
+      }
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  refresh();
+
+  // ตาข่ายกันพลาด: realtime หลุดเงียบๆ ได้ (WebSocket ตาย / แท็บหลับ / มือถือล็อกจอ) แล้ว
+  // postgres_changes ไม่เข้าอีกเลย → หน้าเว็บค้างจนขึ้น "ออฟไลน์" ทั้งที่บอร์ดยังยิงข้อมูลอยู่
+  const pollId = setInterval(refresh, LATEST_REFRESH_MS);
+
+  // กลับมาเปิดแท็บ/ปลดล็อกจอ → ดึงทันที ไม่ต้องรอครบรอบ poll
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') refresh();
+  };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
 
   const channel = client
     .channel(`house-${houseId}-latest`)
@@ -192,13 +226,22 @@ export function subscribeSupabaseLatest(
       }
     )
     .subscribe((status) => {
+      // SUBSCRIBED ครั้งแรก = ต่อติดปกติ (refresh() แรกกำลังทำงานอยู่แล้ว) · ครั้งถัดๆ ไป = เพิ่ง
+      // ต่อกลับหลังหลุด → ต้องดึงย้อนเอาแถวที่พลาดไประหว่างขาด (realtime ไม่ replay ให้)
+      if (status === 'SUBSCRIBED') {
+        if (loadedOnce) refresh();
+        return;
+      }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        onError('การเชื่อมต่อ realtime กับ Supabase ขัดข้อง — กำลังลองเชื่อมต่อใหม่');
+        // ไม่ขึ้น error ให้ผู้ใช้ตกใจ — poll ทุก LATEST_REFRESH_MS คุมค่าให้สดอยู่แล้ว
+        console.warn('[supabase] realtime channel', status, '— ใช้ poll สำรองระหว่างต่อใหม่');
       }
     });
 
   return () => {
     cancelled = true;
+    clearInterval(pollId);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
     client.removeChannel(channel);
   };
 }
@@ -493,19 +536,28 @@ export function subscribeBedScan(
     updatedAt: r.updated_at,
   });
 
-  client
-    .from('bed_scan')
-    .select('rom_id,temp_c,updated_at')
-    .eq('house_id', houseId)
-    .then(({ data, error }) => {
-      if (cancelled) return;
-      if (error) {
-        onError('โหลด live scan ไม่สำเร็จ');
-        return;
-      }
-      for (const r of data ?? []) map.set(r.rom_id, toRow(r));
-      emit();
-    });
+  let loadedOnce = false;
+  async function reload() {
+    if (cancelled) return;
+    const { data, error } = await client
+      .from('bed_scan')
+      .select('rom_id,temp_c,updated_at')
+      .eq('house_id', houseId);
+    if (cancelled) return;
+    if (error) {
+      if (!loadedOnce) onError('โหลด live scan ไม่สำเร็จ');
+      return;
+    }
+    loadedOnce = true;
+    map.clear();   // reload = ภาพเต็มจาก DB (แถวที่ถูกลบ เช่น reset mapping จะหายตามด้วย)
+    for (const r of data ?? []) map.set(r.rom_id, toRow(r));
+    emit();
+  }
+
+  reload();
+  // live scan ต้องสดจริง (หน้าจับคู่ดูค่าพุ่งตอนกำเซนเซอร์) — ESP32 push ทุก ~5 วิ, poll คู่กับ
+  // realtime กันกรณี WebSocket หลุดแล้วค่าค้างจนขึ้น "เก่า" ทั้งที่บอร์ดยัง push อยู่
+  const pollId = setInterval(reload, BED_SCAN_REFRESH_MS);
 
   const channel = client
     .channel(`house-${houseId}-bedscan`)
@@ -524,13 +576,15 @@ export function subscribeBedScan(
       }
     )
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        onError('การเชื่อมต่อ realtime (live scan) ขัดข้อง — กำลังลองใหม่');
+      if (status === 'SUBSCRIBED' && loadedOnce) reload();   // ต่อกลับหลังหลุด → ดึงภาพเต็มใหม่
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[supabase] realtime (live scan)', status, '— ใช้ poll สำรองระหว่างต่อใหม่');
       }
     });
 
   return () => {
     cancelled = true;
+    clearInterval(pollId);
     client.removeChannel(channel);
   };
 }
