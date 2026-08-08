@@ -35,6 +35,31 @@ export function positionLabel(address: string | null | undefined): string {
 // label ของชั้นในกอง (sensors.tier — 'top' | 'mid' | 'bottom') สำหรับการ์ดหน้าแรก
 export const TIER_LABELS: Record<string, string> = { top: 'บน', mid: 'กลาง', bottom: 'ล่าง' };
 
+// ตำแหน่งที่เลือกได้ของเซนเซอร์อากาศ RS485 (ตามความยาวโรง — คนละแกนกับชั้นในกอง)
+// เขียนลง sensors.ui_position (แสดงผลอย่างเดียว) ไม่ใช่ location ที่เฟิร์มแวร์ใช้ routing
+export const AIR_POSITIONS: BedPosition[] = [
+  { address: 'head', label: 'หัวโรง' },
+  { address: 'mid', label: 'กลางโรง' },
+  { address: 'tail', label: 'ท้ายโรง' },
+];
+
+const AIR_LABEL_BY_POS = new Map(AIR_POSITIONS.map((p) => [p.address, p.label]));
+
+export function airPositionLabel(pos: string | null | undefined): string {
+  if (!pos) return 'ยังไม่ระบุ';
+  return AIR_LABEL_BY_POS.get(pos) ?? pos;
+}
+
+// ตำแหน่งที่ถูกเลือกซ้ำในการ์ดเซนเซอร์อากาศ — นับเฉพาะตัวที่ "ใช้งาน" (ตัวที่ปิดไว้ไม่กินตำแหน่ง)
+export function duplicateAirPositions(draft: { position: string; enabled: boolean }[]): string[] {
+  const count = new Map<string, number>();
+  for (const d of draft) {
+    if (!d.enabled || !d.position) continue;
+    count.set(d.position, (count.get(d.position) ?? 0) + 1);
+  }
+  return [...count.entries()].filter(([, n]) => n > 1).map(([p]) => p);
+}
+
 // address ที่ถูกเลือกซ้ำ (มี rom มากกว่า 1 ตัวชี้ตำแหน่งเดียวกัน) — ไม่นับ 'ว่าง' ('') และ 'ไม่ใช้'
 // (สองอันนั้นมีได้หลายตัว) ใช้กันผู้ใช้บันทึกทับกันเอง (1 ตำแหน่งมีได้ตัวเดียว)
 export function duplicatePositions(draft: Record<string, string>): string[] {

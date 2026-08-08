@@ -1,12 +1,14 @@
 // Data layer โหมด Internet (Supabase) — ให้รูปแบบข้อมูลตรงกับ backend REST เดิม
 // (LatestResponse/ConfigResponse/CommandResult ใน lib/types.ts) เพื่อให้ lib/derive.ts,
 // lib/interlock.ts และ component เดิมใช้ต่อได้ทันทีโดยไม่ต้องแก้
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabaseClient';
 import { RANGE_MS, RANGE_META, type AirHistory, type HistoryRange, type Point, type RangeKey, type SensorSeriesRow } from './history';
 import { BED_SCAN_REFRESH_MS, LATEST_REFRESH_MS } from './constants';
 import type {
   ActuatorKind,
   ActuatorStateRow,
+  AirSensor,
   AlertConfigRow,
   AlertRow,
   BedScanRow,
@@ -27,6 +29,7 @@ const RANGE_BUCKET_SEC: Record<HistoryRange, number> = { '24h': 1800, '7d': 1080
 
 interface SensorMeta {
   kind: string;
+  // ตำแหน่งที่ใช้ "แสดงผล" — ui_position (แก้ได้จากหน้าเว็บ) ชนะ location (คีย์ routing ของเฟิร์มแวร์)
   location: string | null;
   rowNo: number | null;
   tier: string | null;
@@ -47,6 +50,47 @@ function upsertReading(map: Map<string, SensorReadingRow>, row: SensorReadingRow
   const key = `${row.sensorId ?? `${row.kind}:${row.location ?? ''}`}:${row.metric}`;
   const cur = map.get(key);
   if (!cur || new Date(row.ts).getTime() >= new Date(cur.ts).getTime()) map.set(key, row);
+}
+
+// แถว sensors ที่ frontend ใช้ — enabled/ui_position มาจาก migration 011 (อาจยังไม่รัน)
+interface SensorMetaRaw {
+  id: number;
+  kind: string;
+  location: string | null;
+  row_no?: number | null;
+  tier?: string | null;
+  rom_id?: string | null;
+  enabled?: boolean | null;
+  ui_position?: string | null;
+}
+
+// เลือกคอลัมน์ sensors แบบทนต่อ migration ที่ยังไม่ได้รัน: ลองชุดเต็มก่อน ถ้า DB ยังไม่มีคอลัมน์
+// ใหม่ (PostgREST ตอบ 42703) ค่อยถอยไปชุดเดิม — ไม่งั้น dashboard ทั้งหน้าดับจนกว่าจะรัน 011
+// (เคยเจอเคสนี้กับ alert_config.threshold ของ 009 มาแล้ว)
+const SENSOR_COLS_FULL = 'id,kind,location,row_no,tier,rom_id,enabled,ui_position';
+const SENSOR_COLS_LEGACY = 'id,kind,location,row_no,tier,rom_id';
+let sensorColsWarned = false;
+let bedScanColsWarned = false;
+
+async function selectSensorMeta(
+  client: SupabaseClient,
+  houseId: string
+): Promise<{ data: SensorMetaRaw[] | null; error: unknown }> {
+  const full = await client.from('sensors').select(SENSOR_COLS_FULL).eq('house_id', houseId);
+  if (!full.error) return { data: full.data as SensorMetaRaw[], error: null };
+  if (!isMissingColumn(full.error)) return { data: null, error: full.error };
+  if (!sensorColsWarned) {
+    sensorColsWarned = true;
+    console.warn('[supabase] sensors ยังไม่มี enabled/ui_position — ยังไม่ได้รัน migration 011 (ใช้ค่า default ไปก่อน)');
+  }
+  const legacy = await client.from('sensors').select(SENSOR_COLS_LEGACY).eq('house_id', houseId);
+  return { data: (legacy.data as SensorMetaRaw[]) ?? null, error: legacy.error };
+}
+
+// PostgREST คืน code 42703 (undefined_column) เมื่อ select คอลัมน์ที่ยังไม่มีใน DB
+function isMissingColumn(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === '42703';
 }
 
 function upsertActuator(map: Map<ActuatorKind, ActuatorStateRow>, row: ActuatorStateRow) {
@@ -95,7 +139,7 @@ export function subscribeSupabaseLatest(
   // (ตารางเล็กมาก ~10 แถว/โรง) ไม่งั้นแก้ mapping แล้วหน้าแรกไม่ขยับจนกว่าจะ refresh เอง
   async function loadMeta(): Promise<boolean> {
     const [sensorsRes, actuatorsRes] = await Promise.all([
-      client.from('sensors').select('id,kind,location,row_no,tier,rom_id').eq('house_id', houseId),
+      selectSensorMeta(client, houseId),
       client.from('actuators').select('id,kind').eq('house_id', houseId),
     ]);
     if (cancelled) return false;
@@ -104,12 +148,14 @@ export function subscribeSupabaseLatest(
     sensorMeta.clear();
     for (const s of sensorsRes.data ?? []) {
       const needsRom = s.kind === 'bed_temp' || s.kind === 'outside_temp';
+      // enabled=false = ผู้ใช้บอกว่าไม่ได้ติดตั้งจุดนี้ · DS18B20 ต้องผูก rom_id ด้วยถึงจะมีค่าจริง
+      const enabled = s.enabled !== false;
       sensorMeta.set(s.id, {
         kind: s.kind,
-        location: s.location,
+        location: s.ui_position ?? s.location,
         rowNo: s.row_no ?? null,
         tier: s.tier ?? null,
-        inUse: needsRom ? s.rom_id != null : true,
+        inUse: enabled && (needsRom ? s.rom_id != null : true),
       });
       // location เป็น metadata สำหรับ label เท่านั้น (จัดกลุ่มด้วย sensor_id) — แต่ถ้า null = misconfig
       // ใน DB: การ์ดจะโชว์ "เซนเซอร์ #id" แทนชื่อจุด ควรไปเซ็ต location ให้ครบ (ดู supabase/migrations)
@@ -559,10 +605,20 @@ export function subscribeBedScan(
   let loadedOnce = false;
   async function reload() {
     if (cancelled) return;
-    const { data, error } = await client
-      .from('bed_scan')
-      .select('rom_id,temp_c,updated_at,ignored')
-      .eq('house_id', houseId);
+    // ทนต่อ migration 010 ที่ยังไม่ได้รัน (คอลัมน์ ignored) — ไม่งั้นหน้าจับคู่ดับทั้งการ์ด
+    type ScanRaw = { rom_id: string; temp_c: number | null; updated_at: string; ignored?: boolean | null };
+    const full = await client.from('bed_scan').select('rom_id,temp_c,updated_at,ignored').eq('house_id', houseId);
+    let data = full.data as ScanRaw[] | null;
+    let error = full.error;
+    if (error && isMissingColumn(error)) {
+      if (!bedScanColsWarned) {
+        bedScanColsWarned = true;
+        console.warn('[supabase] bed_scan ยังไม่มี ignored — ยังไม่ได้รัน migration 010 (ปุ่ม "ไม่ใช้" จะยังบันทึกไม่ได้)');
+      }
+      const legacy = await client.from('bed_scan').select('rom_id,temp_c,updated_at').eq('house_id', houseId);
+      data = legacy.data as ScanRaw[] | null;
+      error = legacy.error;
+    }
     if (cancelled) return;
     if (error) {
       if (!loadedOnce) onError('โหลด live scan ไม่สำเร็จ');
@@ -619,6 +675,58 @@ export async function fetchSupabaseMappingSensors(houseId: string): Promise<Mapp
     .in('kind', ['bed_temp', 'outside_temp']);
   if (error || !data) return [];
   return data.map((r) => ({ id: r.id, kind: r.kind, address: r.address, romId: r.rom_id ?? null }));
+}
+
+// เซนเซอร์อากาศ RS485 ทุก address สำหรับการ์ด "จับคู่เซนเซอร์ความชื้น" (supabase/migrations/011)
+// ทนต่อกรณียังไม่ได้รัน 011 — คืน enabled=true / uiPosition=null ไปก่อน (การ์ดจะเตือนให้รัน migration)
+export async function fetchSupabaseAirSensors(houseId: string): Promise<AirSensor[]> {
+  if (!supabase) return [];
+  const client = supabase;
+  type AirRaw = { id: number; address: string; location: string | null; enabled?: boolean | null; ui_position?: string | null };
+  const map = (rows: AirRaw[]): AirSensor[] =>
+    rows
+      .map((r) => ({
+        id: r.id,
+        address: String(r.address ?? ''),
+        location: r.location,
+        uiPosition: r.ui_position ?? null,
+        enabled: r.enabled !== false,
+      }))
+      .sort((a, b) => a.address.localeCompare(b.address, undefined, { numeric: true }));
+
+  const full = await client
+    .from('sensors')
+    .select('id,address,location,enabled,ui_position')
+    .eq('house_id', houseId)
+    .eq('kind', 'air_th');
+  if (!full.error) return map((full.data ?? []) as AirRaw[]);
+  if (!isMissingColumn(full.error)) return [];
+
+  const legacy = await client
+    .from('sensors')
+    .select('id,address,location')
+    .eq('house_id', houseId)
+    .eq('kind', 'air_th');
+  if (legacy.error) return [];
+  return map((legacy.data ?? []) as AirRaw[]);
+}
+
+// ตั้งตำแหน่งที่โชว์ + เปิด/ปิด ของเซนเซอร์อากาศ (RPC set_air_display — authenticated)
+export async function setSupabaseAirDisplay(
+  houseId: string,
+  address: string,
+  uiPosition: string,
+  enabled: boolean
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase.rpc('set_air_display', {
+    p_house: houseId,
+    p_address: address,
+    p_ui_position: uiPosition,
+    p_enabled: enabled,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 
 // ทำเครื่องหมาย "ไม่ใช้" ต่อ ROM (RPC set_rom_ignored — authenticated, supabase/migrations/010)

@@ -83,6 +83,16 @@ export interface MappingSensor {
 // SensorPoint ต้องรู้ชั้น (tier) ด้วยเพื่อ label การ์ดในกองเป็น บน/กลาง/ล่าง — ดู lib/maintenance.ts
 export type SensorTier = 'top' | 'mid' | 'bottom';
 
+// เซนเซอร์อากาศ RS485 หนึ่งตัว สำหรับหน้า "จับคู่เซนเซอร์ความชื้น" (supabase/migrations/011)
+// address = modbus addr (คีย์ฮาร์ดแวร์ที่ไม่เปลี่ยน) · uiPosition = ตำแหน่งที่โชว์ (แก้ได้)
+export interface AirSensor {
+  id: number;
+  address: string; // '1' | '2' | '3'
+  location: string | null; // คีย์ routing ของเฟิร์มแวร์ — read-only ฝั่งหน้าเว็บ
+  uiPosition: string | null; // 'head' | 'mid' | 'tail' | null (= ใช้ location)
+  enabled: boolean;
+}
+
 // ตาราง alert_config (008 + 009) — เปิด/ปิด + ค่าเกณฑ์การแจ้งเตือนต่อ code
 export interface AlertConfigRow {
   code: string;

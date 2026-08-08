@@ -1,7 +1,8 @@
-import type { ActuatorKind, AlertConfigRow, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, MappingSensor, SensorMetaRow } from './types';
+import type { ActuatorKind, AirSensor, AlertConfigRow, AlertRow, CommandAction, CommandResult, ConfigResponse, LatestResponse, MappingSensor, SensorMetaRow } from './types';
 import {
   MOCK_SENSOR_META,
   buildMockAirHistory,
+  buildMockAirSensors,
   buildMockAlertConfig,
   buildMockAlerts,
   buildMockConfig,
@@ -19,6 +20,8 @@ import {
   deleteSupabaseAlertsAll,
   deleteSupabaseAlertsBefore,
   fetchSupabaseAirHistory,
+  fetchSupabaseAirSensors,
+  setSupabaseAirDisplay,
   fetchSupabaseAlertConfig,
   fetchSupabaseAlerts,
   fetchSupabaseConfig,
@@ -139,6 +142,19 @@ export function assignSensorRom(houseId: string, rom: string, address: string): 
 }
 export function setRomIgnored(houseId: string, rom: string, ignored: boolean): Promise<{ ok: boolean; message?: string }> {
   if (SUPABASE_ENABLED) return setSupabaseRomIgnored(houseId, rom, ignored);
+  return Promise.resolve({ ok: true });
+}
+export function fetchAirSensors(houseId: string = HOUSE_ID): Promise<AirSensor[]> {
+  if (SUPABASE_ENABLED) return fetchSupabaseAirSensors(houseId);
+  return Promise.resolve(buildMockAirSensors());
+}
+export function setAirDisplay(
+  houseId: string,
+  address: string,
+  uiPosition: string,
+  enabled: boolean
+): Promise<{ ok: boolean; message?: string }> {
+  if (SUPABASE_ENABLED) return setSupabaseAirDisplay(houseId, address, uiPosition, enabled);
   return Promise.resolve({ ok: true });
 }
 export function countReadings(houseId: string = HOUSE_ID, beforeIso?: string): Promise<number> {

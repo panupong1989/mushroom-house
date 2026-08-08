@@ -7,6 +7,7 @@ import { bucketSensorReadings, type SensorSeriesRow } from './history';
 import type {
   ActuatorKind,
   ActuatorStateRow,
+  AirSensor,
   AlertConfigRow,
   AlertRow,
   BedScanRow,
@@ -333,6 +334,15 @@ export function buildMockAlertConfig(): AlertConfigRow[] {
     { code: 'RH_HIGH', enabled: true, threshold: 90 },
     { code: 'RH_LOW', enabled: true, threshold: 85 },
     { code: 'LOW_WATER', enabled: false, threshold: null }, // เฟส1 mock: ปิดน้ำต่ำไว้ให้เห็นตัวอย่าง
+  ];
+}
+
+// เซนเซอร์อากาศ RS485 3 address ตรงกับ seed 001 — โรงจริงใช้ 2 ตัว (addr 1 หัวโรง, 3 ท้ายโรง)
+export function buildMockAirSensors(): AirSensor[] {
+  return [
+    { id: 1, address: '1', location: 'head', uiPosition: 'head', enabled: true },
+    { id: 2, address: '2', location: 'mid', uiPosition: null, enabled: false },
+    { id: 3, address: '3', location: 'tail', uiPosition: 'tail', enabled: true },
   ];
 }
 

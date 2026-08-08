@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AIR_POSITIONS,
   BED_POSITIONS,
   IGNORED_VALUE,
+  airPositionLabel,
+  duplicateAirPositions,
   currentSelection,
   duplicatePositions,
   planChanges,
@@ -114,6 +117,42 @@ describe('planSize', () => {
     expect(planSize(planChanges({ A: 'outside' }, {}, new Set(['A'])))).toBe(1);
     expect(planSize(planChanges({ A: IGNORED_VALUE }, { A: 'outside' }, new Set()))).toBe(1);
     expect(planSize(planChanges({ A: '', B: '' }, {}, new Set()))).toBe(0);
+  });
+});
+
+describe('เซนเซอร์อากาศ RS485 (AIR_POSITIONS / duplicateAirPositions)', () => {
+  it('3 ตำแหน่งตามความยาวโรง — คนละแกนกับชั้นในกอง', () => {
+    expect(AIR_POSITIONS.map((p) => p.address)).toEqual(['head', 'mid', 'tail']);
+    expect(airPositionLabel('head')).toBe('หัวโรง');
+    expect(airPositionLabel('tail')).toBe('ท้ายโรง');
+  });
+  it('ยังไม่ระบุตำแหน่ง', () => {
+    expect(airPositionLabel('')).toBe('ยังไม่ระบุ');
+    expect(airPositionLabel(null)).toBe('ยังไม่ระบุ');
+  });
+  it('ตำแหน่งซ้ำเฉพาะตัวที่ "ใช้งาน" เท่านั้น (ตัวที่ปิดไว้ไม่กินตำแหน่ง)', () => {
+    expect(
+      duplicateAirPositions([
+        { position: 'head', enabled: true },
+        { position: 'head', enabled: true },
+      ])
+    ).toEqual(['head']);
+    // addr ที่ปิดไว้ถือตำแหน่งเดิมค้างอยู่ ไม่ควรบล็อกการบันทึก
+    expect(
+      duplicateAirPositions([
+        { position: 'head', enabled: true },
+        { position: 'head', enabled: false },
+      ])
+    ).toEqual([]);
+  });
+  it('โรงจริง: addr1 หัวโรง + addr3 ท้ายโรง + addr2 ปิด → ไม่ซ้ำ', () => {
+    expect(
+      duplicateAirPositions([
+        { position: 'head', enabled: true },
+        { position: '', enabled: false },
+        { position: 'tail', enabled: true },
+      ])
+    ).toEqual([]);
   });
 });
 

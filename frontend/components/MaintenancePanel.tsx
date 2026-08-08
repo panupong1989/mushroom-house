@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { AirSensorCard } from './AirSensorCard';
 import { Card } from './Card';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { useBedScan, useNow } from '@/lib/hooks';
@@ -326,6 +327,9 @@ export function MaintenancePanel({
           </button>
         </div>
       </Card>
+
+      {/* ---- ส่วนที่ 1b: จับคู่เซนเซอร์อากาศ RS485 (ตำแหน่ง + ใช้/ไม่ใช้) ---- */}
+      <AirSensorCard houseId={houseId} telemetry={telemetry} />
 
       {/* ---- ส่วนที่ 2: เคลียร์ข้อมูล (DESTRUCTIVE) ---- */}
       <Card title="🗑️ เคลียร์ข้อมูล (ลบถาวร)">
