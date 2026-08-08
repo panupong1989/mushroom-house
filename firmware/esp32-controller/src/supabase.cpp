@@ -37,6 +37,8 @@ static bool get_json(const String &url, JsonDocument &doc) {
   if (!net_online()) return false;
   HTTPClient http;
   if (!http.begin(secure, url)) return false;
+  http.setConnectTimeout(5000);   // กัน TLS handshake ค้างยาวบนเน็ตช้า → watchdog
+  http.setTimeout(8000);
   add_auth_headers(http);
   int code = http.GET();
   bool ok = false;
@@ -55,6 +57,8 @@ static bool post_body(const char *path, const String &body) {
   if (!net_online()) return false;
   HTTPClient http;
   if (!http.begin(secure, rest(path))) return false;
+  http.setConnectTimeout(5000);
+  http.setTimeout(8000);
   add_auth_headers(http);
   http.addHeader("Prefer", "return=minimal");
   int code = http.POST(body);

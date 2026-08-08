@@ -146,12 +146,13 @@ void setup() {
   mqtt_begin();
 #endif
 
-  // hardware watchdog 15s — arduino-esp32 3.x (IDF5) เปลี่ยน signature เป็นรับ config struct
+  // hardware watchdog 30s — เผื่อ HTTPS/TLS หลายคำขอบนเน็ตช้า (control loop จริงเร็วมาก) กันรีบูตวน
+  // arduino-esp32 3.x (IDF5) เปลี่ยน signature เป็นรับ config struct
 #if defined(ESP_ARDUINO_VERSION) && ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
-  esp_task_wdt_config_t wdt_cfg = { .timeout_ms = 15000, .idle_core_mask = 0, .trigger_panic = true };
+  esp_task_wdt_config_t wdt_cfg = { .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true };
   esp_task_wdt_init(&wdt_cfg);
 #else
-  esp_task_wdt_init(15, true);
+  esp_task_wdt_init(30, true);
 #endif
   esp_task_wdt_add(NULL);
 }
@@ -170,14 +171,17 @@ void loop() {
   // resolve sensor/actuator ids ครั้งเดียวเมื่อมีเน็ต (retry ทุก 10s จนสำเร็จ)
   if (net_online() && !supabase_ids_ready() && now - t_resolve >= 10000) {
     t_resolve = now;
-    if (supabase_resolve_ids()) { supabase_fetch_alert_config(); supabase_fetch_rom_map(); }   // โหลดครั้งแรกทันทีที่พร้อม
+    supabase_resolve_ids();   // แค่ resolve (2 GET) — config/rom_map ดึงแยกรอบด้านล่าง
   }
 
-  // refresh alert_config + rom map ทุก 60s (ผู้ใช้ toggle แจ้งเตือน / จับคู่ ROM ใหม่จาก dashboard ได้ระหว่างทาง)
-  if (net_online() && now - t_alertcfg >= 60000) {
+  // ดึง alert_config + rom_map "ทีละตัวต่อรอบ" สลับกันทุก 20s (แต่ละตัว refresh ~40s)
+  // ⚠️ สำคัญ: ไม่ยิงหลาย HTTPS ใน loop iteration เดียว — บนเน็ตช้า TLS handshake หลายตัวรวดกันเกิน
+  //    watchdog 30s → รีบูตวนได้ (เจอหน้างาน ked_2G) · แยกรอบ + timeout ต่อคำขอ (supabase.cpp) กันไว้
+  if (net_online() && supabase_ids_ready() && now - t_alertcfg >= 20000) {
     t_alertcfg = now;
-    supabase_fetch_alert_config();
-    supabase_fetch_rom_map();
+    static uint8_t which = 0;
+    if (which == 0) supabase_fetch_alert_config(); else supabase_fetch_rom_map();
+    which ^= 1;
   }
 
   // ---- control loop (edge-autonomous ทุก CONTROL_PERIOD_MS ไม่ว่าโหมดไหน/เน็ตมีหรือไม่) ----
