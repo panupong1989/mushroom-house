@@ -70,17 +70,25 @@ static bool post_body(const char *path, const String &body) {
 bool supabase_resolve_ids() {
   if (!net_online()) return false;
 
-  // sensors: map ตาม (kind, location) — ตรงกับ seed ใน supabase/migrations/001_init.sql
+  // sensors: air_th ผูกด้วย address = modbus addr (คงที่ตามฮาร์ดแวร์) ไม่ใช่ location —
+  // location เป็นตำแหน่งที่ผู้ใช้แก้ได้เองจากหน้าเว็บ (supabase/migrations/011) ถ้า resolve
+  // ด้วย location เหมือนเดิม พอผู้ใช้ย้ายตำแหน่งจะยิงค่าเข้าผิดตัวทันที
+  // bed_temp/water_level ยังใช้ location เดิม (bed จริงผูกด้วย rom_id — ดู supabase_fetch_rom_map)
   {
     JsonDocument doc;
-    String url = rest("sensors") + "?house_id=eq." + HOUSE_ID + "&select=id,kind,location";
+    String url = rest("sensors") + "?house_id=eq." + HOUSE_ID + "&select=id,kind,location,address";
     if (!get_json(url, doc)) return false;
     for (JsonObject o : doc.as<JsonArray>()) {
       long id = o["id"] | -1;
       const char *kind = o["kind"] | "";
       const char *loc = o["location"] | "";
+      const char *addr = o["address"] | "";
       if (!strcmp(kind, "air_th")) {
-        for (int i = 0; i < 3; i++) if (!strcmp(loc, SENSOR_LOC[i])) air_id[i] = id;
+        for (int i = 0; i < 3; i++) {
+          char want[8];
+          snprintf(want, sizeof(want), "%u", (unsigned)RS485_ADDR[i]);
+          if (!strcmp(addr, want)) air_id[i] = id;
+        }
       } else if (!strcmp(kind, "bed_temp")) {
         for (int i = 0; i < 3; i++) if (!strcmp(loc, SENSOR_LOC[i])) bed_id[i] = id;
       } else if (!strcmp(kind, "water_level")) {
