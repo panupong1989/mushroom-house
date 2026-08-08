@@ -145,6 +145,27 @@ describe('deriveTelemetry — ในกอง 6 จุด จัดกลุ่�
     expect(t.bed.every((p) => p.rowNo === null)).toBe(true);
     expect(t.bedTempMax).toBe(40);
   });
+
+  // การ์ดหน้าแรกตั้งชื่อจุดในกองจาก tier (บน/กลาง/ล่าง) — ต้องส่งผ่าน derive มาถึง SensorPoint
+  // และเรียงในแถวด้วย tier ไม่ใช่ location (สองอย่างนี้เป็นคนละแกน: ชั้น vs ตามยาวโรง)
+  it('ส่งผ่าน tier มาถึง SensorPoint และเรียงในแถวตามชั้น บน→กลาง→ล่าง', () => {
+    const withTier = (tier: string, rowNo: number, value: number, sensorId: number): SensorReadingRow => ({
+      id: sensorId,
+      sensorId,
+      kind: 'bed_temp',
+      location: null,
+      rowNo,
+      tier,
+      metric: 'temp',
+      value,
+      ts: at(5),
+    });
+    const t = deriveTelemetry(
+      latest([withTier('bottom', 1, 32, 3), withTier('top', 1, 30, 1), withTier('mid', 1, 31, 2)]),
+      NOW
+    );
+    expect(t.bed.map((p) => p.tier)).toEqual(['top', 'mid', 'bottom']);
+  });
 });
 
 describe('deriveTelemetry — นอกโรง (kind: outside_temp)', () => {

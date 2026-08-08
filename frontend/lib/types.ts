@@ -21,6 +21,8 @@ export interface SensorReadingRow {
   // แถวที่ 1/2 ของกอง (เฉพาะ bed_temp โรง 2 แถว, supabase/migrations/005_real_sensors.sql) — null/undefined
   // สำหรับ kind อื่นหรือ path ที่ไม่มีข้อมูลนี้ (backend REST เก่า)
   rowNo?: number | null;
+  // ชั้นในกอง top/mid/bottom (เฉพาะ bed_temp) — ใช้ตั้ง label การ์ดหน้าแรกเป็น บน/กลาง/ล่าง
+  tier?: string | null;
   metric: string; // 'temp' | 'rh' | 'level'
   value: number;
   ts: string;
@@ -67,6 +69,7 @@ export interface BedScanRow {
   romId: string;
   tempC: number | null;
   updatedAt: string;
+  ignored: boolean; // ผู้ใช้ทำเครื่องหมาย "ไม่ใช้" (supabase/migrations/010) — ไม่นับ/ไม่แสดงบน dashboard
 }
 
 // record ตำแหน่งเซนเซอร์ (sensors) สำหรับจับคู่ ROM — kind = 'bed_temp' | 'outside_temp'
@@ -76,6 +79,9 @@ export interface MappingSensor {
   address: string; // key ตำแหน่งคงที่ (เช่น 'row1_head_top', 'outside') — ดู lib/maintenance.ts
   romId: string | null; // rom ที่ผูกอยู่ตอนนี้ (null = ยังไม่จับคู่)
 }
+
+// SensorPoint ต้องรู้ชั้น (tier) ด้วยเพื่อ label การ์ดในกองเป็น บน/กลาง/ล่าง — ดู lib/maintenance.ts
+export type SensorTier = 'top' | 'mid' | 'bottom';
 
 // ตาราง alert_config (008 + 009) — เปิด/ปิด + ค่าเกณฑ์การแจ้งเตือนต่อ code
 export interface AlertConfigRow {

@@ -12,3 +12,6 @@ coverage/
 firmware/**/secrets.h
 frontend/next-env.d.ts
 frontend/tsconfig.tsbuildinfo
+
+# Supabase CLI local state (project ref / versions ที่ลิงก์ไว้เครื่องนี้) — ไม่ใช่ของโปรเจกต์
+supabase/.temp/

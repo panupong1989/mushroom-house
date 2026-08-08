@@ -13,6 +13,7 @@ import {
 import { SUPABASE_ENABLED } from './supabaseClient';
 import {
   assignSupabaseSensorRom,
+  setSupabaseRomIgnored,
   countSupabaseAlerts,
   countSupabaseReadings,
   deleteSupabaseAlertsAll,
@@ -134,6 +135,10 @@ export function fetchMappingSensors(houseId: string = HOUSE_ID): Promise<Mapping
 }
 export function assignSensorRom(houseId: string, rom: string, address: string): Promise<{ ok: boolean; message?: string }> {
   if (SUPABASE_ENABLED) return assignSupabaseSensorRom(houseId, rom, address);
+  return Promise.resolve({ ok: true });
+}
+export function setRomIgnored(houseId: string, rom: string, ignored: boolean): Promise<{ ok: boolean; message?: string }> {
+  if (SUPABASE_ENABLED) return setSupabaseRomIgnored(houseId, rom, ignored);
   return Promise.resolve({ ok: true });
 }
 export function countReadings(houseId: string = HOUSE_ID, beforeIso?: string): Promise<number> {

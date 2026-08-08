@@ -173,6 +173,7 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
         kind: 'bed_temp',
         location: loc,
         rowNo,
+        tier: BED_TIER[loc],
         metric: 'temp',
         value: snap.bedTemps[rowNo][loc],
         ts: snap.ts,
@@ -321,7 +322,7 @@ const MOCK_ROMS = [
 
 export function buildMockBedScan(nowMs: number = Date.now()): BedScanRow[] {
   const iso = new Date(nowMs).toISOString();
-  return MOCK_ROMS.map((romId, i) => ({ romId, tempC: round1(31 + Math.sin(i) * 0.8), updatedAt: iso }));
+  return MOCK_ROMS.map((romId, i) => ({ romId, tempC: round1(31 + Math.sin(i) * 0.8), updatedAt: iso, ignored: false }));
 }
 
 // mock alert_config (dev/preview) — 3 code เปิดหมด

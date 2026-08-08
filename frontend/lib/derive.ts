@@ -11,6 +11,7 @@ export interface SensorPoint {
   rh: number | null; // เฉพาะ air_th
   ts: number | null;
   rowNo: number | null; // แถวที่ 1/2 (เฉพาะ bed_temp โรง 2 แถว) — null = ไม่เกี่ยว/ไม่รู้
+  tier: string | null; // ชั้น top/mid/bottom ในกอง (เฉพาะ bed_temp) — label การ์ดเป็น บน/กลาง/ล่าง
 }
 
 export interface DerivedTelemetry {
@@ -31,6 +32,7 @@ interface PointAcc {
   sensorId: number | null;
   location: string | null;
   rowNo: number | null;
+  tier: string | null;
   temp: number | null;
   tempTs: number | null;
   rh: number | null;
@@ -52,7 +54,7 @@ function identityKey(row: SensorReadingRow): string {
 }
 
 function accToPoint(a: PointAcc): SensorPoint {
-  return { sensorId: a.sensorId, location: a.location, rowNo: a.rowNo, temp: a.temp, rh: a.rh, ts: a.tempTs ?? a.rhTs };
+  return { sensorId: a.sensorId, location: a.location, rowNo: a.rowNo, tier: a.tier, temp: a.temp, rh: a.rh, ts: a.tempTs ?? a.rhTs };
 }
 
 function orderPoints(a: SensorPoint, b: SensorPoint): number {
@@ -64,17 +66,25 @@ function orderPoints(a: SensorPoint, b: SensorPoint): number {
   return (a.sensorId ?? 0) - (b.sensorId ?? 0);
 }
 
-// ในกอง: จัดกลุ่มด้วยแถว (row_no) ก่อนเสมอ แล้วค่อยเรียงตามตำแหน่งในแถว (หัว/กลาง/ท้าย) — ให้ UI
+// ในกอง: จัดกลุ่มด้วยแถว (row_no) ก่อนเสมอ แล้วค่อยเรียงตามชั้น บน→กลาง→ล่าง (tier) — ให้ UI
 // จับกลุ่ม "แถวที่ 1 / แถวที่ 2" ได้ตรงๆ จากลำดับอาเรย์ (ดู components/BedTempCard.tsx)
+// จุดที่ไม่มี tier (legacy/misconfig) ตกไปท้ายแถวแล้วเรียงด้วย location เดิม
+const TIER_ORDER = ['top', 'mid', 'bottom'];
+
 function orderBedPoints(a: SensorPoint, b: SensorPoint): number {
   const ra = a.rowNo ?? 0;
   const rb = b.rowNo ?? 0;
   if (ra !== rb) return ra - rb;
+  const ta = TIER_ORDER.indexOf(a.tier ?? '');
+  const tb = TIER_ORDER.indexOf(b.tier ?? '');
+  const oa = ta === -1 ? 99 : ta;
+  const ob = tb === -1 ? 99 : tb;
+  if (oa !== ob) return oa - ob;
   return orderPoints(a, b);
 }
 
 function newAcc(row: SensorReadingRow): PointAcc {
-  return { sensorId: row.sensorId ?? null, location: row.location, rowNo: row.rowNo ?? null, temp: null, tempTs: null, rh: null, rhTs: null };
+  return { sensorId: row.sensorId ?? null, location: row.location, rowNo: row.rowNo ?? null, tier: row.tier ?? null, temp: null, tempTs: null, rh: null, rhTs: null };
 }
 
 function upsertTemp(map: Map<string, PointAcc>, row: SensorReadingRow, ts: number | null) {
@@ -86,6 +96,7 @@ function upsertTemp(map: Map<string, PointAcc>, row: SensorReadingRow, ts: numbe
   }
   cur.location = cur.location ?? row.location;
   cur.rowNo = cur.rowNo ?? row.rowNo ?? null;
+  cur.tier = cur.tier ?? row.tier ?? null;
   map.set(key, cur);
 }
 
@@ -98,6 +109,7 @@ function upsertRh(map: Map<string, PointAcc>, row: SensorReadingRow, ts: number 
   }
   cur.location = cur.location ?? row.location;
   cur.rowNo = cur.rowNo ?? row.rowNo ?? null;
+  cur.tier = cur.tier ?? row.tier ?? null;
   map.set(key, cur);
 }
 

@@ -29,6 +29,11 @@ interface SensorMeta {
   kind: string;
   location: string | null;
   rowNo: number | null;
+  tier: string | null;
+  // "ใช้งานอยู่จริง" — DS18B20 (bed_temp/outside_temp) นับเฉพาะตำแหน่งที่ผูก rom_id ไว้ในหน้าจับคู่
+  // ตำแหน่งที่ยังไม่จับคู่/ปลดออกแล้ว ต้องไม่โผล่บนหน้าแรก (ไม่งั้นค่าเก่าค้างเป็น "ผี" เพราะ
+  // เราดึง readings ย้อนหลัง READING_HISTORY_LIMIT แถว) · air_th/water_level ไม่มี ROM = ใช้เสมอ
+  inUse: boolean;
 }
 
 // แถวล่าสุดพอสำหรับ dedupe ต่อ (kind, location, metric) ตอน initial load — เกินพอสำหรับ
@@ -73,7 +78,9 @@ export function subscribeSupabaseLatest(
   function emit() {
     if (cancelled) return;
     onData({
-      sensors: Array.from(readings.values()),
+      // กรองด้วย meta ตอน emit (ไม่ใช่ตอนเก็บ) เพราะ mapping เปลี่ยนได้ระหว่างหน้าเปิดอยู่ —
+      // ปลดตำแหน่งในหน้าจับคู่แล้วหน้าแรกต้องหายทันทีรอบ refresh ถัดไป
+      sensors: Array.from(readings.values()).filter((r) => sensorMeta.get(r.sensorId ?? -1)?.inUse !== false),
       actuators: Array.from(actuatorStates.values()),
       mode,
       mode_ts: modeTs,
@@ -84,17 +91,26 @@ export function subscribeSupabaseLatest(
   let loadedOnce = false;
   let refreshing = false;
 
-  // metadata (sensors/actuators) เปลี่ยนแทบไม่เลย — โหลดครั้งเดียวแล้ว cache ไว้
+  // metadata (sensors/actuators) — โหลดซ้ำทุกรอบ refresh เพราะ rom_id เปลี่ยนได้จากหน้าจับคู่
+  // (ตารางเล็กมาก ~10 แถว/โรง) ไม่งั้นแก้ mapping แล้วหน้าแรกไม่ขยับจนกว่าจะ refresh เอง
   async function loadMeta(): Promise<boolean> {
     const [sensorsRes, actuatorsRes] = await Promise.all([
-      client.from('sensors').select('id,kind,location,row_no').eq('house_id', houseId),
+      client.from('sensors').select('id,kind,location,row_no,tier,rom_id').eq('house_id', houseId),
       client.from('actuators').select('id,kind').eq('house_id', houseId),
     ]);
     if (cancelled) return false;
     if (sensorsRes.error || actuatorsRes.error) return false;
 
+    sensorMeta.clear();
     for (const s of sensorsRes.data ?? []) {
-      sensorMeta.set(s.id, { kind: s.kind, location: s.location, rowNo: s.row_no ?? null });
+      const needsRom = s.kind === 'bed_temp' || s.kind === 'outside_temp';
+      sensorMeta.set(s.id, {
+        kind: s.kind,
+        location: s.location,
+        rowNo: s.row_no ?? null,
+        tier: s.tier ?? null,
+        inUse: needsRom ? s.rom_id != null : true,
+      });
       // location เป็น metadata สำหรับ label เท่านั้น (จัดกลุ่มด้วย sensor_id) — แต่ถ้า null = misconfig
       // ใน DB: การ์ดจะโชว์ "เซนเซอร์ #id" แทนชื่อจุด ควรไปเซ็ต location ให้ครบ (ดู supabase/migrations)
       if ((s.kind === 'air_th' || s.kind === 'bed_temp') && s.location == null) {
@@ -138,6 +154,7 @@ export function subscribeSupabaseLatest(
         kind: meta.kind,
         location: meta.location,
         rowNo: meta.rowNo,
+        tier: meta.tier,
         metric: row.metric,
         value: row.value,
         ts: row.ts,
@@ -157,7 +174,8 @@ export function subscribeSupabaseLatest(
     if (cancelled || refreshing) return;
     refreshing = true;
     try {
-      if (!metaReady) metaReady = await loadMeta();
+      // โหลด meta ใหม่ทุกรอบ (mapping เปลี่ยนได้) — พลาดรอบเดียวยังใช้ของเดิมต่อได้
+      metaReady = (await loadMeta()) || metaReady;
       const ok = metaReady && (await loadLatest());
       if (cancelled) return;
       if (ok) loadedOnce = true;
@@ -190,13 +208,14 @@ export function subscribeSupabaseLatest(
       (payload) => {
         const row = payload.new as { id: number; sensor_id: number; ts: string; metric: string; value: number };
         const meta = sensorMeta.get(row.sensor_id);
-        if (!meta) return; // เซนเซอร์ใหม่ที่เพิ่มหลัง init — v1 ยังไม่ re-fetch meta ระหว่างทาง
+        if (!meta) return; // เซนเซอร์ที่เพิ่งเพิ่มใน DB — รอบ refresh ถัดไป (โหลด meta ใหม่) จะเก็บให้เอง
         upsertReading(readings, {
           id: row.id,
           sensorId: row.sensor_id,
           kind: meta.kind,
           location: meta.location,
           rowNo: meta.rowNo,
+          tier: meta.tier,
           metric: row.metric,
           value: row.value,
           ts: row.ts,
@@ -530,10 +549,11 @@ export function subscribeBedScan(
     if (!cancelled) onData(Array.from(map.values()));
   };
 
-  const toRow = (r: { rom_id: string; temp_c: number | null; updated_at: string }): BedScanRow => ({
+  const toRow = (r: { rom_id: string; temp_c: number | null; updated_at: string; ignored?: boolean | null }): BedScanRow => ({
     romId: r.rom_id,
     tempC: r.temp_c,
     updatedAt: r.updated_at,
+    ignored: r.ignored === true,
   });
 
   let loadedOnce = false;
@@ -541,7 +561,7 @@ export function subscribeBedScan(
     if (cancelled) return;
     const { data, error } = await client
       .from('bed_scan')
-      .select('rom_id,temp_c,updated_at')
+      .select('rom_id,temp_c,updated_at,ignored')
       .eq('house_id', houseId);
     if (cancelled) return;
     if (error) {
@@ -569,7 +589,7 @@ export function subscribeBedScan(
           const old = payload.old as { rom_id?: string };
           if (old?.rom_id) map.delete(old.rom_id);
         } else {
-          const r = payload.new as { rom_id: string; temp_c: number | null; updated_at: string };
+          const r = payload.new as { rom_id: string; temp_c: number | null; updated_at: string; ignored?: boolean | null };
           map.set(r.rom_id, toRow(r));
         }
         emit();
@@ -599,6 +619,19 @@ export async function fetchSupabaseMappingSensors(houseId: string): Promise<Mapp
     .in('kind', ['bed_temp', 'outside_temp']);
   if (error || !data) return [];
   return data.map((r) => ({ id: r.id, kind: r.kind, address: r.address, romId: r.rom_id ?? null }));
+}
+
+// ทำเครื่องหมาย "ไม่ใช้" ต่อ ROM (RPC set_rom_ignored — authenticated, supabase/migrations/010)
+// ตั้ง true จะปลดตำแหน่งที่ผูกอยู่ให้ด้วย (ทำใน RPC)
+export async function setSupabaseRomIgnored(
+  houseId: string,
+  rom: string,
+  ignored: boolean
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase.rpc('set_rom_ignored', { p_house: houseId, p_rom: rom, p_ignored: ignored });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 
 // จับคู่ rom → ตำแหน่ง (RPC assign_sensor_rom — authenticated เท่านั้น) · address '' = ปลดเป็นว่าง

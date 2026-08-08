@@ -15,9 +15,20 @@ import {
   purgeReadingsBefore,
   resetSensorRom,
   resolveAllAlerts,
+  setRomIgnored,
 } from '@/lib/api';
-import { BED_POSITIONS, duplicatePositions, pendingChanges, positionLabel, shortRom } from '@/lib/maintenance';
+import {
+  BED_POSITIONS,
+  IGNORED_VALUE,
+  currentSelection,
+  duplicatePositions,
+  planChanges,
+  planSize,
+  positionLabel,
+  shortRom,
+} from '@/lib/maintenance';
 import { endOfDayMs } from '@/lib/history';
+import { timeAgoLabel } from '@/lib/format';
 import type { DerivedTelemetry } from '@/lib/derive';
 import type { FsmMode, MappingSensor } from '@/lib/types';
 
@@ -74,31 +85,48 @@ export function MaintenancePanel({
     return m;
   }, [sensors]);
 
+  // rom ที่ถูกทำเครื่องหมาย "ไม่ใช้" อยู่ตอนนี้ (bed_scan.ignored — supabase/migrations/010)
+  const ignoredNow = useMemo(() => new Set(scan.filter((s) => s.ignored).map((s) => s.romId)), [scan]);
+
   const selectedByRom = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const s of scan) m[s.romId] = draft[s.romId] ?? currentByRom[s.romId] ?? '';
+    for (const s of scan) m[s.romId] = draft[s.romId] ?? currentSelection(s.romId, currentByRom, ignoredNow);
     return m;
-  }, [scan, draft, currentByRom]);
+  }, [scan, draft, currentByRom, ignoredNow]);
 
   const dups = useMemo(() => duplicatePositions(selectedByRom), [selectedByRom]);
-  const changes = useMemo(() => pendingChanges(selectedByRom, currentByRom), [selectedByRom, currentByRom]);
+  const plan = useMemo(
+    () => planChanges(selectedByRom, currentByRom, ignoredNow),
+    [selectedByRom, currentByRom, ignoredNow]
+  );
+  const changeCount = planSize(plan);
   const mappedCount = sensors.filter((s) => s.romId).length;
+  // เป้าหมายการจับคู่ = 7 ตำแหน่ง ลบตัวที่ผู้ใช้บอกว่าไม่ใช้ (ไม่ต้องขึ้น 5/7 ค้างตลอด)
+  const ignoredCount = scan.filter((s) => s.ignored).length;
+  const targetCount = Math.max(0, BED_POSITIONS.length - ignoredCount);
 
   async function saveMapping() {
     setSaving(true);
     setStatus(null);
     let failed = 0;
-    for (const { rom, address } of changes) {
-      const res = await assignSensorRom(houseId, rom, address);
-      if (!res.ok) failed++;
+    // ปลดธง "ไม่ใช้" ก่อน แล้วค่อยผูกตำแหน่ง — set_rom_ignored(true) เคลียร์ rom_id ทิ้ง ถ้าสลับลำดับ
+    // การผูกตำแหน่งที่เพิ่งทำจะโดนล้างในรอบเดียวกัน
+    for (const { rom, ignored } of plan.ignores.filter((i) => !i.ignored)) {
+      if (!(await setRomIgnored(houseId, rom, ignored)).ok) failed++;
+    }
+    for (const { rom, address } of plan.assigns) {
+      if (!(await assignSensorRom(houseId, rom, address)).ok) failed++;
+    }
+    for (const { rom, ignored } of plan.ignores.filter((i) => i.ignored)) {
+      if (!(await setRomIgnored(houseId, rom, ignored)).ok) failed++;
     }
     setSaving(false);
     setDraft({});
     setReloadKey((k) => k + 1);
     setStatus(
       failed === 0
-        ? { kind: 'ok', msg: `บันทึกการจับคู่แล้ว ${changes.length} ตัว` }
-        : { kind: 'err', msg: `บันทึกไม่สำเร็จ ${failed}/${changes.length} ตัว — ตรวจสอบว่ายัง login อยู่` }
+        ? { kind: 'ok', msg: `บันทึกแล้ว ${changeCount} ตัว` }
+        : { kind: 'err', msg: `บันทึกไม่สำเร็จ ${failed} รายการ — ตรวจสอบว่ายัง login อยู่ (หรือยังไม่ได้รัน migration 010)` }
     );
   }
 
@@ -179,13 +207,17 @@ export function MaintenancePanel({
   }
 
   const rs485Count = telemetry.air.filter((p) => p.temp != null).length;
+  // โพรบที่ยังตอบบนบัสจริง vs แถวที่ค้างเก่า (หลุดสายแล้ว แต่ bed_scan ยังมีแถวเดิมอยู่)
+  const staleScan = scan.filter((r) => now > 0 && now - new Date(r.updatedAt).getTime() > FRESH_MS);
+  const liveScanCount = scan.length - staleScan.length;
 
   return (
     <div className="flex flex-col gap-4">
       {/* ---- ส่วนที่ 3: สถานะเซนเซอร์ (ดูตอนติดตั้ง) ---- */}
       <Card title="🔧 สถานะเซนเซอร์ (ตอนติดตั้ง)">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label="DS18B20 เจอ" value={scanLoading ? '…' : `${scan.length}`} unit="ตัว" />
+          {/* "เจอ" = ตอบบนบัสจริงในรอบล่าสุด — แถวเก่าที่ค้างใน bed_scan ไม่นับ (โพรบหลุดสาย) */}
+          <Stat label="DS18B20 เจอ" value={scanLoading ? '…' : `${liveScanCount}`} unit="ตัว" />
           <Stat label="RS485 ตอบ" value={`${rs485Count}`} unit="ตัว" />
           <Stat label="ระดับน้ำ" value={telemetry.waterOk == null ? '–' : telemetry.waterOk ? 'ปกติ' : 'ต่ำ'} />
           <Stat label="โหมด" value={mode ? MODE_LABEL[mode] ?? mode : '–'} />
@@ -193,12 +225,22 @@ export function MaintenancePanel({
         {!telemetry.online && (
           <p className="mt-2 text-[11px] text-warn">⚠️ ESP32 ออฟไลน์ (ไม่มีข้อมูลใหม่) — ค่าอาจไม่อัปเดต</p>
         )}
+        {telemetry.online && staleScan.length > 0 && (
+          <p className="mt-2 text-[11px] text-danger">
+            ⚠️ โพรบ {staleScan.length} ตัวหลุดจากสาย 1-Wire (ไม่ตอบแล้ว) — เช็คสาย/ขั้วต่อ แล้วค่าจะกลับมาเอง
+          </p>
+        )}
       </Card>
 
       {/* ---- ส่วนที่ 1: จับคู่ ROM ↔ ตำแหน่ง (live) ---- */}
       <Card title="🌡️ จับคู่เซนเซอร์กับตำแหน่ง (live)">
         <p className="mb-2 text-[11px] text-gray-400">
-          กำเซนเซอร์ด้วยมือ → ดูว่า ROM ไหนอุณหภูมิพุ่ง = ตัวนั้น → เลือกตำแหน่ง แล้วกดบันทึก · จับคู่แล้ว {mappedCount}/{BED_POSITIONS.length}
+          กำเซนเซอร์ด้วยมือ → ดูว่า ROM ไหนอุณหภูมิพุ่ง = ตัวนั้น → เลือกตำแหน่ง แล้วกดบันทึก · จับคู่แล้ว{' '}
+          {mappedCount}/{targetCount}
+          {ignoredCount > 0 && <span> · ไม่ใช้ {ignoredCount} ตัว</span>}
+        </p>
+        <p className="mb-2 text-[11px] text-gray-400">
+          เลือก <b>ไม่ใช้</b> สำหรับโพรบที่เจอบนสายแต่ไม่ได้ติดตั้ง (สำรอง/เสีย) — จะไม่ถูกนับและไม่ขึ้นหน้าแรก
         </p>
 
         {scanLoading ? (
@@ -214,18 +256,26 @@ export function MaintenancePanel({
               const ageMs = now && row.updatedAt ? now - new Date(row.updatedAt).getTime() : 0;
               const stale = ageMs > FRESH_MS;
               const dup = sel !== '' && dups.includes(sel);
+              const unused = sel === IGNORED_VALUE;
               return (
                 <div
                   key={row.romId}
-                  className="flex flex-wrap items-center gap-2 rounded-xl2 bg-bg px-2.5 py-2 text-sm"
+                  className={`flex flex-wrap items-center gap-2 rounded-xl2 px-2.5 py-2 text-sm ${unused ? 'bg-bg opacity-50' : 'bg-bg'}`}
                 >
                   <span className="font-mono text-xs text-gray-500" title={row.romId}>
                     {shortRom(row.romId)}
                   </span>
-                  <span className={`flex items-center gap-1 ${stale ? 'text-warn' : 'text-gray-700'}`}>
-                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${stale ? 'bg-warn' : 'bg-leaf'}`} />
+                  {/* ค่าที่ค้างเก่า = โพรบหลุดจากบัส 1-Wire (ESP32 enumerate ไม่เจอแล้ว) ต้องอ่านออกชัดๆ
+                      ไม่ใช่แค่จุดสีเหลือง — ไม่งั้นดูเผินๆ เหมือนจับคู่ครบแต่จริงๆ ไม่มีค่าเข้าเลย */}
+                  <span className={`flex items-center gap-1 ${stale ? 'text-danger' : 'text-gray-700'}`}>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${stale ? 'bg-danger' : 'bg-leaf'}`} />
                     <span className="font-semibold">{row.tempC == null ? '–' : `${row.tempC.toFixed(1)}°`}</span>
                   </span>
+                  {stale && (
+                    <span className="text-[10px] font-medium text-danger">
+                      ไม่เจอบนสาย · {timeAgoLabel(new Date(row.updatedAt).getTime(), now)}
+                    </span>
+                  )}
                   <select
                     value={sel}
                     onChange={(e) => setDraft((d) => ({ ...d, [row.romId]: e.target.value }))}
@@ -238,10 +288,13 @@ export function MaintenancePanel({
                         {p.label}
                       </option>
                     ))}
+                    <option value={IGNORED_VALUE}>ไม่ใช้</option>
                   </select>
                   <span className="w-16 text-right text-[10px]">
                     {sel === '' ? (
                       <span className="text-gray-400">ยังไม่จับคู่</span>
+                    ) : unused ? (
+                      <span className="text-gray-400">— ไม่ใช้</span>
                     ) : (
                       <span className="text-leaf-dark">✓ {positionLabel(sel)}</span>
                     )}
@@ -258,15 +311,15 @@ export function MaintenancePanel({
               <span className={status.kind === 'ok' ? 'text-green-600' : 'text-danger'}>{status.msg}</span>
             ) : dups.length > 0 ? (
               <span className="text-danger">มีตำแหน่งซ้ำ — แก้ก่อนบันทึก</span>
-            ) : changes.length > 0 ? (
-              <span className="text-gray-400">แก้ไป {changes.length} ตัว</span>
+            ) : changeCount > 0 ? (
+              <span className="text-gray-400">แก้ไป {changeCount} ตัว</span>
             ) : (
               <span className="text-gray-400">ยังไม่มีการแก้</span>
             )}
           </span>
           <button
             onClick={saveMapping}
-            disabled={saving || dups.length > 0 || changes.length === 0}
+            disabled={saving || dups.length > 0 || changeCount === 0}
             className="rounded-xl2 bg-gray-800 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40"
           >
             {saving ? 'กำลังบันทึก…' : 'บันทึกการจับคู่'}
