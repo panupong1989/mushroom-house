@@ -5,8 +5,10 @@ export { ACTUATOR_KINDS } from './types';
 // ค่าตั้งต้น fallback (ตรงกับ db/seed.sql + docs/03-control-logic.md)
 // ใช้เมื่อ GET /houses/:id/config ยังโหลดไม่เสร็จ/ล้มเหลว — ของจริงต้อง fetch มาเสมอเมื่อทำได้
 export const FALLBACK_SETPOINTS = {
-  temp_fruit_min: 28,
-  temp_fruit_max: 32,
+  // โซนทอง (ช่วงอุณหภูมิเป้าหมายตอนออกดอก) — แสดงผลอย่างเดียว ไม่ได้คุมอุปกรณ์
+  // (เฟิร์มแวร์ไม่ได้อ่าน temp_fruit_* เลย ตัวคุมจริงคือ temp_heater_on/off + temp_exhaust_on)
+  temp_fruit_min: 30,
+  temp_fruit_max: 33,
   temp_heater_on: 27.5,
   temp_heater_off: 29.5,
   temp_exhaust_on: 33,

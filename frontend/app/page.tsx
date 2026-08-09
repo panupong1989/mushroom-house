@@ -19,7 +19,7 @@ import { AlertConfigPanel } from '@/components/AlertConfigPanel';
 import { MaintenancePanel } from '@/components/MaintenancePanel';
 import { TabNav, type TabKey } from '@/components/TabNav';
 import { ToastStack, type Toast } from '@/components/ToastStack';
-import { useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
+import { useBrowserOnline, useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
 import { SUPABASE_ENABLED } from '@/lib/supabaseClient';
 import { deriveTelemetry } from '@/lib/derive';
 import { HOUSE_ID, sendActuatorCommand } from '@/lib/api';
@@ -33,6 +33,9 @@ export default function Page() {
   const config = useConfig(houseId);
   const now = useNow();
   const { session } = useSession();
+  const netOk = useBrowserOnline();
+  // ฐานข้อมูล "ปกติ" = ดึงข้อมูลมาได้และไม่มี error ค้างอยู่ (useLatest มี poll สำรองทุก 30 วิ อยู่แล้ว)
+  const dbOk = !error && latest !== null;
   // โหมด Supabase: ต้อง login ถึงจะสั่งงานได้ (RLS บังคับจริงด้วย) — โหมด mock/dev ปลดล็อกให้เลย
   const canControl = !SUPABASE_ENABLED || !!session;
 
@@ -102,7 +105,7 @@ export default function Page() {
         <ModeBadge mode={latest?.mode ?? null} />
       </header>
 
-      <ConnectionBadge online={telemetry.online} lastUpdateMs={telemetry.lastUpdateMs} nowMs={now || Date.now()} />
+      <ConnectionBadge online={telemetry.online} dbOk={dbOk} netOk={netOk} />
 
       {error && (
         <div className="rounded-xl2 bg-danger/10 p-3 text-sm text-danger">
@@ -156,21 +159,25 @@ export default function Page() {
 
       {tab === 'settings' && (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:gap-4 md:items-start">
-            {SUPABASE_ENABLED && <LoginPanel session={session} />}
-            {canControl ? (
-              <SettingsPanel houseId={houseId} />
-            ) : (
-              <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
-                🔒 เข้าสู่ระบบด้านบนก่อนเพื่อแก้ setpoint
-              </div>
-            )}
-          </div>
-          {canControl && (
+          {/* บัญชี/เข้าสู่ระบบ = แถวบนกลางจอ (แคบกว่าเนื้อหา ไม่กินพื้นที่ครึ่งจอเปล่าๆ) */}
+          {SUPABASE_ENABLED && (
+            <div className="mx-auto w-full max-w-md">
+              <LoginPanel session={session} />
+            </div>
+          )}
+          {canControl ? (
             <>
-              <AlertConfigPanel houseId={houseId} />
-              <MaintenancePanel houseId={houseId} telemetry={telemetry} mode={latest?.mode ?? null} />
+              {/* setpoint + เกณฑ์แจ้งเตือน อยู่คู่กัน — เป็นค่าตั้งชุดเดียวกันในหัวคนใช้ */}
+              <div className="flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start">
+                <SettingsPanel houseId={houseId} />
+                <AlertConfigPanel houseId={houseId} />
+              </div>
+              <MaintenancePanel houseId={houseId} telemetry={telemetry} />
             </>
+          ) : (
+            <div className="rounded-xl2 border border-white/70 bg-card p-4 text-center text-sm text-gray-400 shadow-soft">
+              🔒 เข้าสู่ระบบด้านบนก่อนเพื่อแก้ setpoint
+            </div>
           )}
         </div>
       )}

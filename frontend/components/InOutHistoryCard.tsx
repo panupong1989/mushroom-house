@@ -9,11 +9,11 @@ import { RANGE_META, endOfDayMs, seriesToPoints, type RangeKey } from '@/lib/his
 import { LOCATION_LABELS } from '@/lib/constants';
 import { MOCK_SENSOR_META, buildDemoSensorSeries } from '@/lib/mock';
 
-// อุณหภูมิในโรง (หัว/ท้าย) = เส้นทึบสีแดง 2 เฉด, ความชื้นในโรง (หัว/ท้าย) = เส้นประสีฟ้า 2 เฉด,
-// อุณหภูมินอกโรง = เส้นประสีเทา 1 เส้น (ดู issue #34)
-const IN_TEMP_COLOR: Record<string, string> = { head: '#ef4444', tail: '#b91c1c' };
-const IN_RH_COLOR: Record<string, string> = { head: '#0ea5e9', tail: '#0369a1' };
-const OUTSIDE_COLOR = '#9ca3af';
+// เส้นทึบ = อุณหภูมิ (แกนซ้าย °C) · เส้นประ = ความชื้น (แกนขวา %) · นอกโรง = เส้นประเทา
+// เดิมหัว/ท้ายใช้สีเดียวกันคนละเฉด (แดงเข้ม/แดงอ่อน) แยกไม่ออก — เปลี่ยนเป็นคนละสีไปเลย
+const IN_TEMP_COLOR: Record<string, string> = { head: '#dc2626', tail: '#f59e0b' }; // แดง / ส้มอำพัน
+const IN_RH_COLOR: Record<string, string> = { head: '#2563eb', tail: '#06b6d4' }; // น้ำเงิน / ฟ้าคราม
+const OUTSIDE_COLOR = '#6b7280';
 const LOC_ORDER = ['head', 'mid', 'tail'];
 
 // ชุดที่ 2 — ในโรง (อุณหภูมิ+ความชื้น หัว/ท้าย) + นอกโรง (อุณหภูมิ)

@@ -72,7 +72,17 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
           return (
             <div key={c.code} className="flex items-center justify-between gap-2 rounded-xl2 bg-bg px-3 py-2">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-700">{c.label}</p>
+                <p className="flex flex-wrap items-center gap-1 text-sm font-medium text-gray-700">
+                  {c.label}
+                  {c.needsFirmware && (
+                    <span
+                      className="rounded bg-warn/15 px-1 py-0.5 text-[10px] font-normal text-warn"
+                      title="ตั้งค่าเก็บไว้ได้แล้ว แต่ ESP32 จะเริ่มยิงเตือนหลัง flash เฟิร์มแวร์เวอร์ชันใหม่"
+                    >
+                      รอ flash เฟิร์มแวร์
+                    </span>
+                  )}
+                </p>
                 {c.hasThreshold ? (
                   <p className="flex flex-wrap items-center gap-1 text-[11px] text-gray-500">
                     แจ้งเมื่อ {c.cmp}

@@ -33,10 +33,7 @@ import { timeAgoLabel } from '@/lib/format';
 import type { DerivedTelemetry } from '@/lib/derive';
 import type { FsmMode, MappingSensor } from '@/lib/types';
 
-const FRESH_MS = 15_000; // live scan เก่ากว่านี้ = เตือน (ESP32 push ทุก ~3 วิ)
-const MODE_LABEL: Record<string, string> = {
-  BOOT: 'บูต', SELFTEST: 'เซลฟ์เทสต์', SPAWN_RUN: 'เดินเชื้อ', FRUITING: 'ออกดอก', MANUAL: 'มือ', SAFE_HOLD: 'เซฟโฮลด์',
-};
+const FRESH_MS = 15_000; // live scan เก่ากว่านี้ = โพรบไม่ตอบบนบัสแล้ว (ESP32 push ทุก ~5 วิ)
 
 type PendingDelete = {
   title: string;
@@ -45,15 +42,7 @@ type PendingDelete = {
   run: () => Promise<{ ok: boolean; count?: number; message?: string }>;
 };
 
-export function MaintenancePanel({
-  houseId,
-  telemetry,
-  mode,
-}: {
-  houseId: string;
-  telemetry: DerivedTelemetry;
-  mode: FsmMode | null;
-}) {
+export function MaintenancePanel({ houseId, telemetry }: { houseId: string; telemetry: DerivedTelemetry }) {
   const { rows: scan, loading: scanLoading } = useBedScan(houseId);
   const now = useNow();
   const [sensors, setSensors] = useState<MappingSensor[]>([]);
@@ -207,32 +196,8 @@ export function MaintenancePanel({
     setPending((p) => (p ? { ...p, count: n } : p));
   }
 
-  const rs485Count = telemetry.air.filter((p) => p.temp != null).length;
-  // โพรบที่ยังตอบบนบัสจริง vs แถวที่ค้างเก่า (หลุดสายแล้ว แต่ bed_scan ยังมีแถวเดิมอยู่)
-  const staleScan = scan.filter((r) => now > 0 && now - new Date(r.updatedAt).getTime() > FRESH_MS);
-  const liveScanCount = scan.length - staleScan.length;
-
   return (
     <div className="flex flex-col gap-4">
-      {/* ---- ส่วนที่ 3: สถานะเซนเซอร์ (ดูตอนติดตั้ง) ---- */}
-      <Card title="🔧 สถานะเซนเซอร์ (ตอนติดตั้ง)">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {/* "เจอ" = ตอบบนบัสจริงในรอบล่าสุด — แถวเก่าที่ค้างใน bed_scan ไม่นับ (โพรบหลุดสาย) */}
-          <Stat label="DS18B20 เจอ" value={scanLoading ? '…' : `${liveScanCount}`} unit="ตัว" />
-          <Stat label="RS485 ตอบ" value={`${rs485Count}`} unit="ตัว" />
-          <Stat label="ระดับน้ำ" value={telemetry.waterOk == null ? '–' : telemetry.waterOk ? 'ปกติ' : 'ต่ำ'} />
-          <Stat label="โหมด" value={mode ? MODE_LABEL[mode] ?? mode : '–'} />
-        </div>
-        {!telemetry.online && (
-          <p className="mt-2 text-[11px] text-warn">⚠️ ESP32 ออฟไลน์ (ไม่มีข้อมูลใหม่) — ค่าอาจไม่อัปเดต</p>
-        )}
-        {telemetry.online && staleScan.length > 0 && (
-          <p className="mt-2 text-[11px] text-danger">
-            ⚠️ โพรบ {staleScan.length} ตัวหลุดจากสาย 1-Wire (ไม่ตอบแล้ว) — เช็คสาย/ขั้วต่อ แล้วค่าจะกลับมาเอง
-          </p>
-        )}
-      </Card>
-
       {/* ---- ส่วนที่ 1: จับคู่ ROM ↔ ตำแหน่ง (live) ---- */}
       <Card title="🌡️ จับคู่เซนเซอร์กับตำแหน่ง (live)">
         <p className="mb-2 text-[11px] text-gray-400">
@@ -431,14 +396,3 @@ export function MaintenancePanel({
   );
 }
 
-function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {
-  return (
-    <div className="rounded-xl2 bg-bg p-2 text-center">
-      <p className="text-[11px] text-gray-400">{label}</p>
-      <p className="text-lg font-bold text-gray-700">
-        {value}
-        {unit && <span className="ml-0.5 text-[11px] font-normal text-gray-400">{unit}</span>}
-      </p>
-    </div>
-  );
-}

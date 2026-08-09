@@ -9,11 +9,11 @@ import { RANGE_META, endOfDayMs, seriesToPoints, type RangeKey } from '@/lib/his
 import { TIER_LABELS } from '@/lib/maintenance';
 import { MOCK_SENSOR_META, buildDemoSensorSeries } from '@/lib/mock';
 
-// สีตามแถว (row_no) แยกให้ดูออกว่าแถวไหน — แถว 1 = โทนส้ม/อำพัน, แถว 2 = โทนฟ้า/น้ำเงิน
-// ความเข้ม (shade) ต่างกันตามตำแหน่งในแถว (หัว/กลาง/ท้าย)
+// สีต่อจุด — เดิมใช้เฉดใกล้กันในแถวเดียวกัน (ส้ม 3 เฉด) แยกเส้นไม่ออกเวลาค่าใกล้กัน
+// เปลี่ยนเป็น "คนละสีชัดๆ" ต่อจุด แต่ยังจับกลุ่มได้: แถว 1 = โทนอุ่น, แถว 2 = โทนเย็น
 const ROW_COLORS: Record<number, [string, string, string]> = {
-  1: ['#f59e0b', '#f97316', '#ea580c'],
-  2: ['#0ea5e9', '#0284c7', '#0369a1'],
+  1: ['#e11d48', '#f59e0b', '#65a30d'], // บน=แดงชมพู · กลาง=เหลืองอำพัน · ล่าง=เขียวมะนาว
+  2: ['#2563eb', '#9333ea', '#0d9488'], // บน=น้ำเงิน · กลาง=ม่วง · ล่าง=เขียวน้ำทะเล
 };
 const TIER_ORDER = ['top', 'mid', 'bottom'];
 

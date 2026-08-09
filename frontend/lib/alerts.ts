@@ -11,7 +11,8 @@ export const ALERT_CODE_LABEL: Record<string, string> = {
   HOT: 'อากาศร้อนอันตราย',
   RH_HIGH: 'ความชื้นสูงเกิน',
   RH_LOW: 'ความชื้นต่ำเกิน',
-  COLD: 'อากาศเย็นเกิน',
+  COLD: 'อากาศต่ำเกิน',
+  BED_LOW: 'กองต่ำเกิน',
   SENSOR_LOST: 'เซนเซอร์หลุด',
 };
 export function alertCodeLabel(code: string): string {
@@ -29,10 +30,13 @@ export interface AlertConfigCode {
   unit: string;
   cmp: string; // '≥' | '>' | '<'
   safeNote: string; // interlock ที่ยังทำงานเสมอแม้ปิดแจ้งเตือน (ว่าง = ไม่มี)
+  needsFirmware?: boolean; // เกณฑ์ใหม่ที่เฟิร์มแวร์ยังไม่ได้ยิง — ต้อง flash ก่อนถึงจะเด้งจริง
 }
 export const ALERT_CONFIG_CODES: AlertConfigCode[] = [
   { code: 'HOT', label: 'อากาศร้อนอันตราย', hasThreshold: true, defaultThreshold: 38, unit: '°C', cmp: '≥', safeNote: 'exhaust/mist ยังทำงานเสมอ' },
+  { code: 'COLD', label: 'อากาศต่ำเกิน', hasThreshold: true, defaultThreshold: 27.5, unit: '°C', cmp: '<', safeNote: 'ต่ำกว่า 27.5° ห้ามพ่นหมอกเสมอ (interlock)', needsFirmware: true },
   { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', hasThreshold: true, defaultThreshold: 40, unit: '°C', cmp: '≥', safeNote: 'heater ยังตัด + exhaust เปิดเสมอ' },
+  { code: 'BED_LOW', label: 'กองต่ำเกิน', hasThreshold: true, defaultThreshold: 30, unit: '°C', cmp: '<', safeNote: '', needsFirmware: true },
   { code: 'RH_HIGH', label: 'ความชื้นสูงเกิน', hasThreshold: true, defaultThreshold: 90, unit: '%', cmp: '>', safeNote: '' },
   { code: 'RH_LOW', label: 'ความชื้นต่ำเกิน', hasThreshold: true, defaultThreshold: 85, unit: '%', cmp: '<', safeNote: '' },
   { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', hasThreshold: false, defaultThreshold: null, unit: '', cmp: '', safeNote: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
