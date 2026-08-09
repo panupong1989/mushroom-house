@@ -31,15 +31,19 @@ export interface AlertConfigCode {
   cmp: string; // '≥' | '>' | '<'
   safeNote: string; // interlock ที่ยังทำงานเสมอแม้ปิดแจ้งเตือน (ว่าง = ไม่มี)
   needsFirmware?: boolean; // เกณฑ์ใหม่ที่เฟิร์มแวร์ยังไม่ได้ยิง — ต้อง flash ก่อนถึงจะเด้งจริง
+  // ระดับความรุนแรงที่ "ยิงจริง" ใช้ — ต้องตรงกับ firmware (main.cpp notify_check) และ
+  // RPC send_test_alert (migration 014) · สำคัญเพราะ notify-line กรองด้วย LINE_MIN_SEVERITY
+  // ตั้ง critical = ตัว warn ทั้งหมดจะไม่เข้า LINE (เคยงงมาแล้วตอนกดทดสอบ — Beer 9 ส.ค.)
+  severity: Severity;
 }
 export const ALERT_CONFIG_CODES: AlertConfigCode[] = [
-  { code: 'HOT', label: 'อากาศร้อนอันตราย', hasThreshold: true, defaultThreshold: 38, unit: '°C', cmp: '≥', safeNote: 'exhaust/mist ยังทำงานเสมอ' },
-  { code: 'COLD', label: 'อากาศต่ำเกิน', hasThreshold: true, defaultThreshold: 27.5, unit: '°C', cmp: '<', safeNote: 'ต่ำกว่า 27.5° ห้ามพ่นหมอกเสมอ (interlock)', needsFirmware: true },
-  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', hasThreshold: true, defaultThreshold: 40, unit: '°C', cmp: '≥', safeNote: 'heater ยังตัด + exhaust เปิดเสมอ' },
-  { code: 'BED_LOW', label: 'กองต่ำเกิน', hasThreshold: true, defaultThreshold: 30, unit: '°C', cmp: '<', safeNote: '', needsFirmware: true },
-  { code: 'RH_HIGH', label: 'ความชื้นสูงเกิน', hasThreshold: true, defaultThreshold: 90, unit: '%', cmp: '>', safeNote: '' },
-  { code: 'RH_LOW', label: 'ความชื้นต่ำเกิน', hasThreshold: true, defaultThreshold: 85, unit: '%', cmp: '<', safeNote: '' },
-  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', hasThreshold: false, defaultThreshold: null, unit: '', cmp: '', safeNote: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)' },
+  { code: 'HOT', label: 'อากาศร้อนอันตราย', hasThreshold: true, defaultThreshold: 38, unit: '°C', cmp: '≥', safeNote: 'exhaust/mist ยังทำงานเสมอ', severity: 'critical' },
+  { code: 'COLD', label: 'อากาศต่ำเกิน', hasThreshold: true, defaultThreshold: 27.5, unit: '°C', cmp: '<', safeNote: 'ต่ำกว่า 27.5° ห้ามพ่นหมอกเสมอ (interlock)', needsFirmware: true, severity: 'warn' },
+  { code: 'BED_OVERHEAT', label: 'กองร้อนเกิน', hasThreshold: true, defaultThreshold: 40, unit: '°C', cmp: '≥', safeNote: 'heater ยังตัด + exhaust เปิดเสมอ', severity: 'critical' },
+  { code: 'BED_LOW', label: 'กองต่ำเกิน', hasThreshold: true, defaultThreshold: 30, unit: '°C', cmp: '<', safeNote: '', needsFirmware: true, severity: 'warn' },
+  { code: 'RH_HIGH', label: 'ความชื้นสูงเกิน', hasThreshold: true, defaultThreshold: 90, unit: '%', cmp: '>', safeNote: '', severity: 'warn' },
+  { code: 'RH_LOW', label: 'ความชื้นต่ำเกิน', hasThreshold: true, defaultThreshold: 85, unit: '%', cmp: '<', safeNote: '', severity: 'warn' },
+  { code: 'LOW_WATER', label: 'ระดับน้ำต่ำ', hasThreshold: false, defaultThreshold: null, unit: '', cmp: '', safeNote: 'ปั๊มยังถูกตัดเมื่อน้ำต่ำเสมอ (interlock)', severity: 'critical' },
 ];
 
 // เรียง: ที่ "ยังไม่หาย" (resolved_at=null) ขึ้นก่อน -> รุนแรงกว่าก่อน -> ใหม่กว่าก่อน

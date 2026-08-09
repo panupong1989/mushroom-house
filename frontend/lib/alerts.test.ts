@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { activeAlertCount, alertCodeLabel, sortAlerts } from './alerts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ALERT_CONFIG_CODES, activeAlertCount, alertCodeLabel, sortAlerts } from './alerts';
 import type { AlertRow } from './types';
 
 const at = (min: number) => `2026-07-09T00:${String(min).padStart(2, '0')}:00Z`;
@@ -43,4 +45,29 @@ describe('alertCodeLabel', () => {
   it('โค้ดไม่รู้จัก -> โชว์โค้ดดิบ', () => {
     expect(alertCodeLabel('WEIRD_CODE')).toBe('WEIRD_CODE');
   });
+});
+
+// ระดับความรุนแรงถูกประกาศไว้ 3 ที่: ตารางนี้ (UI), RPC send_test_alert (migration 014) และ
+// firmware main.cpp — ถ้าหลุดกัน ปุ่มทดสอบจะโกหก (โชว์ว่า "เข้า LINE" แต่จริงๆ ไม่เข้า)
+// อ่าน SQL จริงมาเทียบ ไม่ได้ hardcode ซ้ำ
+describe('ALERT_CONFIG_CODES.severity ตรงกับ RPC send_test_alert (migration 014)', () => {
+  const sql = readFileSync(
+    join(__dirname, '..', '..', 'supabase', 'migrations', '014_test_alert_rpc.sql'),
+    'utf8'
+  );
+  const fromSql = new Map<string, string>();
+  for (const m of sql.matchAll(/when\s+'([A-Z_]+)'\s+then\s+'(critical|warn|info)'/g)) {
+    fromSql.set(m[1], m[2]);
+  }
+
+  it('SQL มี mapping ครบทุก code ที่ UI โชว์', () => {
+    expect(fromSql.size).toBe(ALERT_CONFIG_CODES.length);
+  });
+
+  it.each(ALERT_CONFIG_CODES.map((c) => [c.code, c.severity] as const))(
+    '%s = %s ทั้งใน UI และ SQL',
+    (code, severity) => {
+      expect(fromSql.get(code)).toBe(severity);
+    }
+  );
 });

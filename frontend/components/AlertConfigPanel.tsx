@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card } from './Card';
 import { fetchAlertConfig, sendTestAlert, setAlertConfig, setAlertThreshold } from '@/lib/api';
 import { ALERT_CONFIG_CODES } from '@/lib/alerts';
+import type { Severity } from '@/lib/types';
 
 // การ์ด "ตั้งค่าการแจ้งเตือน" ในหน้าตั้งค่า — toggle เปิด/ปิด + แก้ "ค่าเกณฑ์" ต่อชนิด (แยกจาก setpoint)
 // ⚠️ ปิด/ตั้งค่า = คุมแค่ "เมื่อไหร่เด้งเตือน" · safety interlock (ตัดปั๊ม/heater) ทำงานทุกกรณีเสมอ
@@ -116,7 +117,7 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
     }
   }
 
-  async function test(code: string, label: string, isCritical: boolean) {
+  async function test(code: string, label: string, severity: Severity) {
     setTesting(code);
     setMsg(null);
     const res = await sendTestAlert(houseId, code);
@@ -125,9 +126,10 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
       res.ok
         ? {
             kind: 'ok',
-            text: isCritical
-              ? `ยิงทดสอบ "${label}" แล้ว — ดูในแท็บแจ้งเตือน + LINE ภายในไม่กี่วินาที`
-              : `ยิงทดสอบ "${label}" แล้ว — ขึ้นในแท็บแจ้งเตือน · ระดับ "เตือน" จะไม่เข้า LINE ถ้าตั้ง LINE_MIN_SEVERITY=critical`,
+            text:
+              severity === 'critical'
+                ? `ยิงทดสอบ "${label}" (วิกฤต) แล้ว — ขึ้นในแท็บแจ้งเตือน + เด้ง LINE ภายในไม่กี่วินาที`
+                : `ยิงทดสอบ "${label}" (เตือน) แล้ว — ขึ้นในแท็บแจ้งเตือนแล้ว แต่ไม่เด้ง LINE เพราะตั้ง LINE_MIN_SEVERITY=critical ไว้`,
           }
         : { kind: 'err', text: `ยิงทดสอบไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่ (หรือยังไม่ได้รัน migration 014)'}` }
     );
@@ -139,15 +141,33 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
         ตั้ง &ldquo;เมื่อไหร่เด้งเตือน&rdquo; ได้เอง แยกจาก setpoint คุม AUTO — ตั้งค่าไหนก็ได้ตามที่อยากเฝ้า
         · ระบบความปลอดภัย (ตัดปั๊ม/heater) ยังทำงานทุกกรณีเสมอ
       </p>
+      <p className="mb-2 text-[11px] text-gray-400">
+        ทุกชนิดขึ้นในแท็บ &ldquo;แจ้งเตือน&rdquo; เสมอ · ที่เด้งเข้า LINE ด้วยคือระดับ <b>วิกฤต</b> เท่านั้น
+        (เปลี่ยนได้ที่ secret <code>LINE_MIN_SEVERITY</code> — ตั้งเป็น <code>warn</code> ถ้าอยากให้เข้าครบทุกตัว)
+      </p>
       <div className="flex flex-col gap-1.5">
         {ALERT_CONFIG_CODES.map((c) => {
           const cur = current(c.code, c.defaultThreshold);
-          const isCritical = c.code === 'LOW_WATER' || c.code === 'HOT' || c.code === 'BED_OVERHEAT';
+          const critical = c.severity === 'critical';
           return (
             <div key={c.code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl2 bg-bg px-3 py-2">
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-1 text-sm font-medium text-gray-700">
                   {c.label}
+                  {/* ระดับความรุนแรง = ตัวตัดสินว่าเด้ง LINE ไหม (notify-line กรองด้วย LINE_MIN_SEVERITY)
+                      โชว์ตรงนี้เลย ไม่ต้องรอกดทดสอบแล้วค่อยรู้ */}
+                  <span
+                    className={`rounded px-1 py-0.5 text-[10px] font-normal ${
+                      critical ? 'bg-danger/10 text-danger' : 'bg-warn/15 text-warn'
+                    }`}
+                    title={
+                      critical
+                        ? 'ระดับวิกฤต — เด้งเข้า LINE'
+                        : 'ระดับเตือน — ขึ้นในแท็บแจ้งเตือนอย่างเดียว ไม่เด้ง LINE (ถ้าตั้ง LINE_MIN_SEVERITY=critical)'
+                    }
+                  >
+                    {critical ? '🔴 วิกฤต · เข้า LINE' : '🟠 เตือน · ไม่เข้า LINE'}
+                  </span>
                   {c.needsFirmware && (
                     <span
                       className="rounded bg-warn/15 px-1 py-0.5 text-[10px] font-normal text-warn"
@@ -179,7 +199,7 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
 
               <div className="flex shrink-0 items-center gap-2">
                 <button
-                  onClick={() => test(c.code, c.label, isCritical)}
+                  onClick={() => test(c.code, c.label, c.severity)}
                   disabled={testing !== null}
                   className="rounded-xl2 border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 disabled:opacity-40"
                   title="ยิง alert ปลอม 1 ครั้ง เพื่อเช็คว่าเส้นทางแจ้งเตือน (แท็บแจ้งเตือน + LINE) ทำงานอยู่"
