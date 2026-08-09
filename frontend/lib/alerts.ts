@@ -32,8 +32,8 @@ export interface AlertConfigCode {
   safeNote: string; // interlock ที่ยังทำงานเสมอแม้ปิดแจ้งเตือน (ว่าง = ไม่มี)
   needsFirmware?: boolean; // เกณฑ์ใหม่ที่เฟิร์มแวร์ยังไม่ได้ยิง — ต้อง flash ก่อนถึงจะเด้งจริง
   // ระดับความรุนแรงที่ "ยิงจริง" ใช้ — ต้องตรงกับ firmware (main.cpp notify_check) และ
-  // RPC send_test_alert (migration 014) · สำคัญเพราะ notify-line กรองด้วย LINE_MIN_SEVERITY
-  // ตั้ง critical = ตัว warn ทั้งหมดจะไม่เข้า LINE (เคยงงมาแล้วตอนกดทดสอบ — Beer 9 ส.ค.)
+  // RPC send_test_alert (migration 014) · ใช้จัดลำดับ/สีในแท็บแจ้งเตือนเท่านั้น
+  // ⚠️ ไม่ใช่ตัวตัดสินว่าเข้า LINE ไหมอีกแล้ว — ย้ายไป alert_config.notify_line (migration 015)
   severity: Severity;
 }
 export const ALERT_CONFIG_CODES: AlertConfigCode[] = [

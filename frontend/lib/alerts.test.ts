@@ -47,8 +47,23 @@ describe('alertCodeLabel', () => {
   });
 });
 
+// ปลายทาง LINE ต้อง "ไม่เงียบโดยบังเอิญ" — ถ้ามีใครเปลี่ยน default ของ notify_line เป็น false
+// โรงจะหยุดส่ง LINE เงียบๆ โดยไม่มีใครรู้ (Beer อยากได้ทั้งฝั่งสูงและฝั่งต่ำ) · อ่าน SQL จริงมาเช็ค
+describe('migration 015 — notify_line ต้อง default true (fail-safe = ได้รับแจ้งเตือน)', () => {
+  const sql = readFileSync(
+    join(__dirname, '..', '..', 'supabase', 'migrations', '015_alert_notify_line.sql'),
+    'utf8'
+  );
+  it('เพิ่มคอลัมน์ notify_line พร้อม default true', () => {
+    expect(sql).toMatch(/add column if not exists notify_line boolean not null default true/i);
+  });
+  it('ไม่มีคำสั่งลบ/แก้ข้อมูลเดิม (เพิ่มคอลัมน์อย่างเดียว)', () => {
+    expect(sql).not.toMatch(/\b(drop|delete|truncate)\b/i);
+  });
+});
+
 // ระดับความรุนแรงถูกประกาศไว้ 3 ที่: ตารางนี้ (UI), RPC send_test_alert (migration 014) และ
-// firmware main.cpp — ถ้าหลุดกัน ปุ่มทดสอบจะโกหก (โชว์ว่า "เข้า LINE" แต่จริงๆ ไม่เข้า)
+// firmware main.cpp — ถ้าหลุดกัน ลำดับ/สีในแท็บแจ้งเตือนจะไม่ตรงกับที่ยิงจริง
 // อ่าน SQL จริงมาเทียบ ไม่ได้ hardcode ซ้ำ
 describe('ALERT_CONFIG_CODES.severity ตรงกับ RPC send_test_alert (migration 014)', () => {
   const sql = readFileSync(

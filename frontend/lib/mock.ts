@@ -338,14 +338,16 @@ export function buildMockBedScan(nowMs: number = Date.now()): BedScanRow[] {
   return MOCK_ROMS.map((romId, i) => ({ romId, tempC: round1(31 + Math.sin(i) * 0.8), updatedAt: iso, ignored: false }));
 }
 
-// mock alert_config (dev/preview) — 3 code เปิดหมด
+// mock alert_config (dev/preview) — notifyLine ตั้งให้ต่างกันเพื่อเห็นทั้งสองสถานะบน UI
 export function buildMockAlertConfig(): AlertConfigRow[] {
   return [
-    { code: 'HOT', enabled: true, threshold: 38 },
-    { code: 'BED_OVERHEAT', enabled: true, threshold: 40 },
-    { code: 'RH_HIGH', enabled: true, threshold: 90 },
-    { code: 'RH_LOW', enabled: true, threshold: 85 },
-    { code: 'LOW_WATER', enabled: false, threshold: null }, // เฟส1 mock: ปิดน้ำต่ำไว้ให้เห็นตัวอย่าง
+    { code: 'HOT', enabled: true, threshold: 38, notifyLine: true },
+    { code: 'COLD', enabled: true, threshold: 27.5, notifyLine: true },
+    { code: 'BED_OVERHEAT', enabled: true, threshold: 40, notifyLine: true },
+    { code: 'BED_LOW', enabled: true, threshold: 30, notifyLine: true },
+    { code: 'RH_HIGH', enabled: true, threshold: 90, notifyLine: false }, // ตัวอย่าง: เตือนในเว็บแต่ไม่กวน LINE
+    { code: 'RH_LOW', enabled: true, threshold: 85, notifyLine: false },
+    { code: 'LOW_WATER', enabled: false, threshold: null, notifyLine: true },
   ];
 }
 

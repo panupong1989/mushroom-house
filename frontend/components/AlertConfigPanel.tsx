@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from './Card';
-import { fetchAlertConfig, sendTestAlert, setAlertConfig, setAlertThreshold } from '@/lib/api';
+import { fetchAlertConfig, sendTestAlert, setAlertConfig, setAlertNotifyLine, setAlertThreshold } from '@/lib/api';
 import { ALERT_CONFIG_CODES } from '@/lib/alerts';
-import type { Severity } from '@/lib/types';
 
 // การ์ด "ตั้งค่าการแจ้งเตือน" ในหน้าตั้งค่า — toggle เปิด/ปิด + แก้ "ค่าเกณฑ์" ต่อชนิด (แยกจาก setpoint)
 // ⚠️ ปิด/ตั้งค่า = คุมแค่ "เมื่อไหร่เด้งเตือน" · safety interlock (ตัดปั๊ม/heater) ทำงานทุกกรณีเสมอ
@@ -16,6 +15,7 @@ import type { Severity } from '@/lib/types';
 interface CfgState {
   enabled: boolean;
   threshold: number | null;
+  notifyLine: boolean;
 }
 
 export function AlertConfigPanel({ houseId }: { houseId: string }) {
@@ -31,7 +31,11 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
     let cancelled = false;
     fetchAlertConfig(houseId).then((rows) => {
       if (cancelled) return;
-      setSaved(Object.fromEntries(rows.map((r) => [r.code, { enabled: r.enabled, threshold: r.threshold }])));
+      setSaved(
+        Object.fromEntries(
+          rows.map((r) => [r.code, { enabled: r.enabled, threshold: r.threshold, notifyLine: r.notifyLine }])
+        )
+      );
     });
     return () => {
       cancelled = true;
@@ -45,6 +49,7 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
     return {
       enabled: d.enabled ?? s?.enabled ?? true,
       threshold: d.threshold !== undefined ? d.threshold : s?.threshold ?? defaultThreshold,
+      notifyLine: d.notifyLine ?? s?.notifyLine ?? true,
     };
   }
 
@@ -56,7 +61,8 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
         const s = saved[c.code];
         const enabledChanged = d.enabled !== undefined && d.enabled !== (s?.enabled ?? true);
         const thChanged = d.threshold !== undefined && d.threshold !== (s?.threshold ?? c.defaultThreshold);
-        return enabledChanged || thChanged;
+        const lineChanged = d.notifyLine !== undefined && d.notifyLine !== (s?.notifyLine ?? true);
+        return enabledChanged || thChanged || lineChanged;
       }),
     [draft, saved]
   );
@@ -64,6 +70,11 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
   function setEnabled(code: string, enabled: boolean) {
     setMsg(null);
     setDraft((d) => ({ ...d, [code]: { ...d[code], enabled } }));
+  }
+
+  function setNotifyLine(code: string, notifyLine: boolean) {
+    setMsg(null);
+    setDraft((d) => ({ ...d, [code]: { ...d[code], notifyLine } }));
   }
 
   // เก็บค่าเกณฑ์ลง draft ตอน blur/Enter — validate ว่าเป็นตัวเลข (ไม่จำกัดช่วง: ตั้งได้อิสระ)
@@ -106,6 +117,13 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
           lastErr = res.message ?? '';
         }
       }
+      if (d.notifyLine !== undefined && d.notifyLine !== (s?.notifyLine ?? true)) {
+        const res = await setAlertNotifyLine(houseId, c.code, d.notifyLine);
+        if (!res.ok) {
+          failed++;
+          lastErr = res.message ?? '';
+        }
+      }
     }
     setSaving(false);
     if (failed === 0) {
@@ -117,19 +135,23 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
     }
   }
 
-  async function test(code: string, label: string, severity: Severity) {
+  // ปุ่มทดสอบยิง alert จริงเข้า DB → notify-line อ่าน alert_config.notify_line "ที่บันทึกไว้"
+  // จึงต้องบอกผลตามค่าที่บันทึก ไม่ใช่ค่าใน draft (ไม่งั้นข้อความจะโกหกถ้ายังไม่กดบันทึก)
+  async function test(code: string, label: string) {
     setTesting(code);
     setMsg(null);
+    const savedLine = saved[code]?.notifyLine ?? true;
+    const pending = draft[code]?.notifyLine !== undefined && draft[code]?.notifyLine !== savedLine;
     const res = await sendTestAlert(houseId, code);
     setTesting(null);
+    const note = pending ? ' · (ค่า LINE ที่เพิ่งแก้ยังไม่ได้บันทึก — การทดสอบใช้ค่าที่บันทึกไว้)' : '';
     setMsg(
       res.ok
         ? {
             kind: 'ok',
-            text:
-              severity === 'critical'
-                ? `ยิงทดสอบ "${label}" (วิกฤต) แล้ว — ขึ้นในแท็บแจ้งเตือน + เด้ง LINE ภายในไม่กี่วินาที`
-                : `ยิงทดสอบ "${label}" (เตือน) แล้ว — ขึ้นในแท็บแจ้งเตือนแล้ว แต่ไม่เด้ง LINE เพราะตั้ง LINE_MIN_SEVERITY=critical ไว้`,
+            text: savedLine
+              ? `ยิงทดสอบ "${label}" แล้ว — ขึ้นในแท็บแจ้งเตือน + เด้ง LINE ภายในไม่กี่วินาที${note}`
+              : `ยิงทดสอบ "${label}" แล้ว — ขึ้นในแท็บแจ้งเตือนอย่างเดียว (ชนิดนี้ปิด "ส่ง LINE" ไว้)${note}`,
           }
         : { kind: 'err', text: `ยิงทดสอบไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่ (หรือยังไม่ได้รัน migration 014)'}` }
     );
@@ -142,8 +164,8 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
         · ระบบความปลอดภัย (ตัดปั๊ม/heater) ยังทำงานทุกกรณีเสมอ
       </p>
       <p className="mb-2 text-[11px] text-gray-400">
-        ทุกชนิดขึ้นในแท็บ &ldquo;แจ้งเตือน&rdquo; เสมอ · ที่เด้งเข้า LINE ด้วยคือระดับ <b>วิกฤต</b> เท่านั้น
-        (เปลี่ยนได้ที่ secret <code>LINE_MIN_SEVERITY</code> — ตั้งเป็น <code>warn</code> ถ้าอยากให้เข้าครบทุกตัว)
+        ชนิดที่เปิดไว้จะขึ้นในแท็บ &ldquo;แจ้งเตือน&rdquo; เสมอ · ปุ่ม <b>LINE</b> ของแต่ละแถวคือตัวเลือกว่า
+        จะส่งเข้า LINE ด้วยไหม — เลือกได้อิสระทั้งฝั่ง<b>สูงเกิน</b>และฝั่ง<b>ต่ำเกิน</b> ไม่ผูกกับระดับความรุนแรง
       </p>
       <div className="flex flex-col gap-1.5">
         {ALERT_CONFIG_CODES.map((c) => {
@@ -154,19 +176,19 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
               <div className="min-w-0">
                 <p className="flex flex-wrap items-center gap-1 text-sm font-medium text-gray-700">
                   {c.label}
-                  {/* ระดับความรุนแรง = ตัวตัดสินว่าเด้ง LINE ไหม (notify-line กรองด้วย LINE_MIN_SEVERITY)
-                      โชว์ตรงนี้เลย ไม่ต้องรอกดทดสอบแล้วค่อยรู้ */}
+                  {/* ระดับความรุนแรง = แค่บอกความเร่งด่วน/สีในแท็บแจ้งเตือน
+                      ไม่ใช่ตัวตัดสินว่าเข้า LINE ไหมอีกแล้ว (migration 015 ย้ายไปที่ปุ่ม LINE ต่อแถว) */}
                   <span
                     className={`rounded px-1 py-0.5 text-[10px] font-normal ${
                       critical ? 'bg-danger/10 text-danger' : 'bg-warn/15 text-warn'
                     }`}
                     title={
                       critical
-                        ? 'ระดับวิกฤต — เด้งเข้า LINE'
-                        : 'ระดับเตือน — ขึ้นในแท็บแจ้งเตือนอย่างเดียว ไม่เด้ง LINE (ถ้าตั้ง LINE_MIN_SEVERITY=critical)'
+                        ? 'ระดับวิกฤต — เรื่องเร่งด่วน ขึ้นบนสุดในแท็บแจ้งเตือน (ปลายทาง LINE ตั้งแยกที่ปุ่ม LINE)'
+                        : 'ระดับเตือน — เฝ้าดูไว้ ไม่เร่งด่วนเท่าวิกฤต (ปลายทาง LINE ตั้งแยกที่ปุ่ม LINE)'
                     }
                   >
-                    {critical ? '🔴 วิกฤต · เข้า LINE' : '🟠 เตือน · ไม่เข้า LINE'}
+                    {critical ? '🔴 วิกฤต' : '🟠 เตือน'}
                   </span>
                   {c.needsFirmware && (
                     <span
@@ -198,8 +220,28 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
+                {/* ปลายทาง LINE ต่อชนิด (alert_config.notify_line — migration 015)
+                    แสดงค่าจริงจาก DB ไม่ได้เดาจาก severity · จางลงเมื่อปิดแจ้งเตือนทั้งชนิด */}
                 <button
-                  onClick={() => test(c.code, c.label, c.severity)}
+                  onClick={() => setNotifyLine(c.code, !cur.notifyLine)}
+                  role="switch"
+                  aria-checked={cur.notifyLine}
+                  aria-label={`ส่งแจ้งเตือน ${c.label} เข้า LINE`}
+                  title={
+                    cur.notifyLine
+                      ? 'ชนิดนี้ส่งเข้า LINE — กดเพื่อปิด (ยังขึ้นในแท็บแจ้งเตือนเหมือนเดิม)'
+                      : 'ชนิดนี้ไม่ส่งเข้า LINE — กดเพื่อเปิด'
+                  }
+                  className={`rounded-xl2 border px-2 py-1 text-[11px] font-medium transition ${
+                    cur.notifyLine
+                      ? 'border-leaf/40 bg-leaf/10 text-leaf'
+                      : 'border-gray-200 text-gray-400 line-through'
+                  } ${cur.enabled ? '' : 'opacity-40'}`}
+                >
+                  💬 LINE
+                </button>
+                <button
+                  onClick={() => test(c.code, c.label)}
                   disabled={testing !== null}
                   className="rounded-xl2 border border-gray-200 px-2 py-1 text-[11px] font-medium text-gray-600 disabled:opacity-40"
                   title="ยิง alert ปลอม 1 ครั้ง เพื่อเช็คว่าเส้นทางแจ้งเตือน (แท็บแจ้งเตือน + LINE) ทำงานอยู่"

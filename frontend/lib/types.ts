@@ -100,11 +100,14 @@ export interface AirSensor {
   enabled: boolean;
 }
 
-// ตาราง alert_config (008 + 009) — เปิด/ปิด + ค่าเกณฑ์การแจ้งเตือนต่อ code
+// ตาราง alert_config (008 + 009 + 015) — เปิด/ปิด + ค่าเกณฑ์ + ปลายทาง LINE ต่อ code
 export interface AlertConfigRow {
   code: string;
   enabled: boolean;
   threshold: number | null; // ค่าเกณฑ์ (แยกจาก setpoint); null = ไม่มีเกณฑ์ (LOW_WATER)
+  // ส่งเข้า LINE ไหม (migration 015) — notify-line อ่านคอลัมน์นี้เป็นหลัก แทนการเดาจาก severity
+  // default true ทั้งฝั่งสูงและฝั่งต่ำ (fail-safe = ได้รับแจ้งเตือน ไม่ใช่เงียบ)
+  notifyLine: boolean;
 }
 
 export type CommandAction = 'on' | 'off' | 'auto';

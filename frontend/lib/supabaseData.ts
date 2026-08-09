@@ -71,6 +71,7 @@ const SENSOR_COLS_FULL = 'id,kind,location,row_no,tier,rom_id,enabled,ui_positio
 const SENSOR_COLS_LEGACY = 'id,kind,location,row_no,tier,rom_id';
 let sensorColsWarned = false;
 let bedScanColsWarned = false;
+let alertCfgColsWarned = false;
 
 async function selectSensorMeta(
   client: SupabaseClient,
@@ -498,9 +499,38 @@ export async function countSupabaseAlerts(houseId: string, beforeIso?: string): 
 // alert_config: อ่าน/แก้ toggle เปิด-ปิด + ค่าเกณฑ์ (threshold) การแจ้งเตือนต่อ code
 export async function fetchSupabaseAlertConfig(houseId: string): Promise<AlertConfigRow[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.from('alert_config').select('code,enabled,threshold').eq('house_id', houseId);
-  if (error || !data) return [];
-  return data.map((r) => ({ code: r.code, enabled: r.enabled, threshold: r.threshold ?? null }));
+  const client = supabase;
+  type CfgRaw = { code: string; enabled: boolean; threshold?: number | null; notify_line?: boolean | null };
+  const toRow = (r: CfgRaw): AlertConfigRow => ({
+    code: r.code,
+    enabled: r.enabled,
+    threshold: r.threshold ?? null,
+    notifyLine: r.notify_line !== false, // ยังไม่รัน 015 = ถือว่าเปิด (ตรงกับ default ของคอลัมน์)
+  });
+
+  // ทนต่อ migration 015 ที่ยังไม่ได้รัน (คอลัมน์ notify_line)
+  const full = await client.from('alert_config').select('code,enabled,threshold,notify_line').eq('house_id', houseId);
+  if (!full.error) return ((full.data ?? []) as CfgRaw[]).map(toRow);
+  if (!isMissingColumn(full.error)) return [];
+  if (!alertCfgColsWarned) {
+    alertCfgColsWarned = true;
+    console.warn('[supabase] alert_config ยังไม่มี notify_line — ยังไม่ได้รัน migration 015 (ปุ่ม LINE จะบันทึกไม่ได้)');
+  }
+  const legacy = await client.from('alert_config').select('code,enabled,threshold').eq('house_id', houseId);
+  if (legacy.error) return [];
+  return ((legacy.data ?? []) as CfgRaw[]).map(toRow);
+}
+export async function setSupabaseAlertNotifyLine(
+  houseId: string,
+  code: string,
+  notifyLine: boolean
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase
+    .from('alert_config')
+    .upsert({ house_id: houseId, code, notify_line: notifyLine }, { onConflict: 'house_id,code' });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 export async function setSupabaseAlertConfig(houseId: string, code: string, enabled: boolean): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
