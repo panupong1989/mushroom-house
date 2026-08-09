@@ -779,6 +779,18 @@ export async function setSupabaseAirDisplay(
   return { ok: true };
 }
 
+// ยิง alert ทดสอบ 1 ครั้ง (RPC send_test_alert — authenticated, supabase/migrations/014)
+// ใช้เช็คเส้นทาง alerts INSERT -> Database Webhook -> notify-line -> LINE
+export async function sendSupabaseTestAlert(
+  houseId: string,
+  code: string
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: 'Supabase client ยังไม่พร้อมใช้งาน' };
+  const { error } = await supabase.rpc('send_test_alert', { p_house: houseId, p_code: code });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
 // ทำเครื่องหมาย "ไม่ใช้" ต่อ ROM (RPC set_rom_ignored — authenticated, supabase/migrations/010)
 // ตั้ง true จะปลดตำแหน่งที่ผูกอยู่ให้ด้วย (ทำใน RPC)
 export async function setSupabaseRomIgnored(

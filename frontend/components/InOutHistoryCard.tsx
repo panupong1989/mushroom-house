@@ -9,10 +9,9 @@ import { RANGE_META, endOfDayMs, seriesToPoints, type RangeKey } from '@/lib/his
 import { LOCATION_LABELS } from '@/lib/constants';
 import { MOCK_SENSOR_META, buildDemoSensorSeries } from '@/lib/mock';
 
-// เส้นทึบ = อุณหภูมิ (แกนซ้าย °C) · เส้นประ = ความชื้น (แกนขวา %) · นอกโรง = เส้นประเทา
-// เดิมหัว/ท้ายใช้สีเดียวกันคนละเฉด (แดงเข้ม/แดงอ่อน) แยกไม่ออก — เปลี่ยนเป็นคนละสีไปเลย
-const IN_TEMP_COLOR: Record<string, string> = { head: '#dc2626', tail: '#f59e0b' }; // แดง / ส้มอำพัน
-const IN_RH_COLOR: Record<string, string> = { head: '#2563eb', tail: '#06b6d4' }; // น้ำเงิน / ฟ้าคราม
+// สี = "จุดวัด" (หัวโรง/ท้ายโรง) · ชนิดเส้น = "ค่าอะไร" (ทึบ=อุณหภูมิ °C แกนซ้าย, ประ=ความชื้น % แกนขวา)
+// จับคู่ด้วยสีแบบนี้อ่านง่ายกว่าให้ temp/rh คนละสี — เห็นทันทีว่าเส้นไหนเป็นของจุดเดียวกัน (Beer 9 ส.ค.)
+const POINT_COLOR: Record<string, string> = { head: '#dc2626', mid: '#7c3aed', tail: '#f59e0b' }; // แดง / ม่วง / ส้มอำพัน
 const OUTSIDE_COLOR = '#6b7280';
 const LOC_ORDER = ['head', 'mid', 'tail'];
 
@@ -51,18 +50,19 @@ export function InOutHistoryCard({ houseId, demoMode = false }: { houseId: strin
   const series: ChartSeries[] = [
     ...sortedAir.flatMap((m) => {
       const name = `ในโรง${LOCATION_LABELS[m.location ?? ''] ?? m.location}`;
+      const color = POINT_COLOR[m.location ?? ''] ?? '#ef4444';
       return [
         {
           key: `temp-${m.id}`,
           label: `${name} · อุณหภูมิ`,
-          color: IN_TEMP_COLOR[m.location ?? ''] ?? '#ef4444',
+          color,
           axis: 'primary' as const,
           points: seriesToPoints(airRows, m.id, 'temp', 'max'),
         },
         {
           key: `rh-${m.id}`,
           label: `${name} · ความชื้น`,
-          color: IN_RH_COLOR[m.location ?? ''] ?? '#0ea5e9',
+          color, // สีเดียวกับอุณหภูมิของจุดนี้ — แยกด้วยเส้นประแทน
           dashed: true,
           axis: 'secondary' as const,
           points: seriesToPoints(airRows, m.id, 'rh', 'avg'),
