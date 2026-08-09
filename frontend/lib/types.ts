@@ -39,6 +39,9 @@ export interface LatestResponse {
   actuators: ActuatorStateRow[];
   mode: FsmMode | null;
   mode_ts: string | null;
+  // ความแรงสัญญาณ WiFi ที่ ESP32 รับได้ (dBm ติดลบ — houses.last_rssi, migration 013)
+  // null = เฟิร์มแวร์ยังไม่ push / ยังไม่ได้รัน migration
+  rssi?: number | null;
 }
 
 export type ConfigResponse = Record<string, number>;

@@ -19,7 +19,7 @@ import { AlertConfigPanel } from '@/components/AlertConfigPanel';
 import { MaintenancePanel } from '@/components/MaintenancePanel';
 import { TabNav, type TabKey } from '@/components/TabNav';
 import { ToastStack, type Toast } from '@/components/ToastStack';
-import { useBrowserOnline, useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
+import { useConfig, useLatest, useNow, useSession } from '@/lib/hooks';
 import { SUPABASE_ENABLED } from '@/lib/supabaseClient';
 import { deriveTelemetry } from '@/lib/derive';
 import { HOUSE_ID, sendActuatorCommand } from '@/lib/api';
@@ -33,7 +33,6 @@ export default function Page() {
   const config = useConfig(houseId);
   const now = useNow();
   const { session } = useSession();
-  const netOk = useBrowserOnline();
   // ฐานข้อมูล "ปกติ" = ดึงข้อมูลมาได้และไม่มี error ค้างอยู่ (useLatest มี poll สำรองทุก 30 วิ อยู่แล้ว)
   const dbOk = !error && latest !== null;
   // โหมด Supabase: ต้อง login ถึงจะสั่งงานได้ (RLS บังคับจริงด้วย) — โหมด mock/dev ปลดล็อกให้เลย
@@ -105,7 +104,7 @@ export default function Page() {
         <ModeBadge mode={latest?.mode ?? null} />
       </header>
 
-      <ConnectionBadge online={telemetry.online} dbOk={dbOk} netOk={netOk} />
+      <ConnectionBadge online={telemetry.online} dbOk={dbOk} rssi={latest?.rssi ?? null} />
 
       {error && (
         <div className="rounded-xl2 bg-danger/10 p-3 text-sm text-danger">

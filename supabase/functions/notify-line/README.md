@@ -12,19 +12,20 @@ ESP32 (service_role) insert alerts  →  Database Webhook (INSERT)  →  notify-
 2. แท็บ **Messaging API**:
    - **Channel access token (long-lived)** → กด Issue → เก็บไว้ (= `LINE_CHANNEL_ACCESS_TOKEN`)
    - เพิ่มเพื่อน LINE OA นี้ (สแกน QR) ทั้งคุณและพี่ชาย
-3. หา **userId ปลายทาง** (= `LINE_TO_IDS`):
-   - วิธีง่าย: เปิด webhook ชั่วคราว/ใช้ bot log ดู `source.userId` เมื่อทักหา OA, หรือ
-   - ส่งเข้า **กลุ่ม**: เชิญ OA เข้ากลุ่ม แล้วใช้ `groupId` (push รองรับทั้ง user/group id)
+3. **ปลายทาง** — เลือกทางใดทางหนึ่ง:
+   - **แนะนำ (ง่ายสุด): ไม่ต้องตั้ง `LINE_TO_IDS` เลย** → function จะใช้ `broadcast` ส่งหาเพื่อนทุกคน
+     ของ OA อัตโนมัติ · เหมาะกับ OA ส่วนตัวที่มีแค่คนในบ้านเป็นเพื่อน ไม่ต้องไปหา userId
+   - หรือระบุเจาะจง: ตั้ง `LINE_TO_IDS` เป็น userId/groupId (คั่นด้วย `,`) → ใช้ `push` แทน
 
-> ⚠️ token/userId = **secret** ห้าม commit — ตั้งผ่าน `supabase secrets set` เท่านั้น (ค่าอยู่บน edge ไม่โผล่ใน repo)
+> ⚠️ token = **secret** ห้าม commit — ตั้งผ่าน `supabase secrets set` เท่านั้น (ค่าอยู่บน edge ไม่โผล่ใน repo)
 
 ## 2) ตั้ง secrets + deploy
 ```bash
 supabase link --project-ref <your-ref>
 supabase secrets set LINE_CHANNEL_ACCESS_TOKEN="xxxx"
-supabase secrets set LINE_TO_IDS="Uxxxx,Cxxxx"      # คั่นด้วย , (หลาย id ได้)
 supabase secrets set LINE_MIN_SEVERITY="critical"    # optional: info|warn|critical
 supabase secrets set WEBHOOK_SECRET="สุ่มยาวๆ"        # optional แต่แนะนำ (กันเรียกมั่ว)
+# LINE_TO_IDS: ข้ามได้ (ไม่ตั้ง = broadcast หาเพื่อนทุกคนของ OA)
 supabase functions deploy notify-line --no-verify-jwt
 ```
 `--no-verify-jwt` เพราะ Database Webhook เรียกตรง (ไม่ได้ส่ง JWT ของ user) — ใช้ `WEBHOOK_SECRET` กันแทน

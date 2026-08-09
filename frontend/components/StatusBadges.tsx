@@ -18,24 +18,34 @@ function Chip({ label, value, tone }: { label: string; value: string; tone: Tone
   );
 }
 
+// RSSI (dBm, ติดลบ — ใกล้ 0 = แรง) -> คำอ่านง่ายๆ · เกณฑ์มาตรฐานของ WiFi ทั่วไป
+// >= -60 แรงดี · -61..-70 พอใช้ · -71..-80 อ่อน (เริ่มหลุดง่าย) · < -80 แย่มาก
+export function rssiLabel(rssi: number): { text: string; tone: Tone } {
+  if (rssi >= -60) return { text: `แรง (${rssi})`, tone: 'ok' };
+  if (rssi >= -70) return { text: `พอใช้ (${rssi})`, tone: 'ok' };
+  if (rssi >= -80) return { text: `อ่อน (${rssi})`, tone: 'bad' };
+  return { text: `แย่มาก (${rssi})`, tone: 'bad' };
+}
+
 // แถบสถานะรวม — บอกแค่ "ตอนนี้ปกติไหม" ไม่ต้องมีเวลาให้อ่านตีความเอง (feedback Beer 9 ส.ค.)
-// แยก 3 อย่างเพื่อชี้เป็นว่าถ้าเสียคือเสียตรงไหน:
-//   บอร์ด = ESP32 ยังส่งข้อมูลเข้ามาไหม · ฐานข้อมูล = ต่อ Supabase ได้ไหม · เน็ต = เครื่องที่เปิดหน้านี้
-// (สัญญาณ WiFi ของบอร์ด/RSSI ต้องให้เฟิร์มแวร์ push ขึ้นมาก่อน — ยังไม่มีในเวอร์ชันนี้)
+//   บอร์ด = ESP32 ยังส่งข้อมูลเข้ามาไหม · ฐานข้อมูล = ต่อ Supabase ได้ไหม
+//   สัญญาณบอร์ด = WiFi ที่ ESP32 รับได้ (houses.last_rssi — ต้อง flash เฟิร์มแวร์ที่ push ค่านี้ก่อน)
 export function ConnectionBadge({
   online,
   dbOk,
-  netOk,
+  rssi,
 }: {
   online: boolean;
   dbOk: boolean;
-  netOk: boolean;
+  rssi: number | null;
 }) {
+  // ออฟไลน์อยู่ = ค่า RSSI ที่ค้างไว้ไม่มีความหมายแล้ว อย่าโชว์ว่า "แรง"
+  const wifi = rssi == null || !online ? { text: '—', tone: 'unknown' as Tone } : rssiLabel(rssi);
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-full bg-card px-4 py-2 shadow-soft">
       <Chip label="บอร์ด" value={online ? 'ออนไลน์' : 'ออฟไลน์'} tone={online ? 'ok' : 'bad'} />
       <Chip label="ฐานข้อมูล" value={dbOk ? 'เชื่อมต่อ' : 'ขัดข้อง'} tone={dbOk ? 'ok' : 'bad'} />
-      <Chip label="เน็ตเครื่องนี้" value={netOk ? 'ปกติ' : 'หลุด'} tone={netOk ? 'ok' : 'bad'} />
+      <Chip label="สัญญาณบอร์ด" value={wifi.text} tone={wifi.tone} />
     </div>
   );
 }

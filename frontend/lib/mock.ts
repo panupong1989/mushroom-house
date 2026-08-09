@@ -205,7 +205,7 @@ export function buildMockLatest(nowMs: number = Date.now()): LatestResponse {
   ];
 
   const mode: FsmMode = 'FRUITING';
-  return { sensors, actuators, mode, mode_ts: snap.ts };
+  return { sensors, actuators, mode, mode_ts: snap.ts, rssi: -58 };
 }
 
 export function buildMockConfig(): ConfigResponse {

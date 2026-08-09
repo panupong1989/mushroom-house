@@ -31,23 +31,6 @@ export function useSession(): SessionState {
   return state;
 }
 
-// เน็ตของ "เครื่องที่เปิดหน้านี้" (navigator.onLine) — แยกจากบอร์ด/ฐานข้อมูล ให้ชี้ได้ว่าเสียตรงไหน
-// เริ่มต้น true กัน hydration mismatch (SSR ไม่มี navigator) แล้วค่อยอ่านค่าจริงใน effect
-export function useBrowserOnline(): boolean {
-  const [online, setOnline] = useState(true);
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    update();
-    window.addEventListener('online', update);
-    window.addEventListener('offline', update);
-    return () => {
-      window.removeEventListener('online', update);
-      window.removeEventListener('offline', update);
-    };
-  }, []);
-  return online;
-}
-
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {

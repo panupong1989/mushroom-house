@@ -87,6 +87,29 @@ async function selectSensorMeta(
   return { data: (legacy.data as SensorMetaRaw[]) ?? null, error: legacy.error };
 }
 
+// houses: last_rssi มาจาก migration 013 (อาจยังไม่รัน) — ถอยไปชุดเดิมถ้าไม่มีคอลัมน์
+interface HouseRaw {
+  last_mode?: string | null;
+  last_mode_ts?: string | null;
+  last_rssi?: number | null;
+}
+let houseColsWarned = false;
+
+async function selectHouse(
+  client: SupabaseClient,
+  houseId: string
+): Promise<{ data: HouseRaw | null; error: unknown }> {
+  const full = await client.from('houses').select('last_mode,last_mode_ts,last_rssi').eq('id', houseId).maybeSingle();
+  if (!full.error) return { data: full.data as HouseRaw, error: null };
+  if (!isMissingColumn(full.error)) return { data: null, error: full.error };
+  if (!houseColsWarned) {
+    houseColsWarned = true;
+    console.warn('[supabase] houses ยังไม่มี last_rssi — ยังไม่ได้รัน migration 013 (สัญญาณบอร์ดจะขึ้น "—")');
+  }
+  const legacy = await client.from('houses').select('last_mode,last_mode_ts').eq('id', houseId).maybeSingle();
+  return { data: (legacy.data as HouseRaw) ?? null, error: legacy.error };
+}
+
 // PostgREST คืน code 42703 (undefined_column) เมื่อ select คอลัมน์ที่ยังไม่มีใน DB
 function isMissingColumn(error: unknown): boolean {
   const code = (error as { code?: string } | null)?.code;
@@ -118,6 +141,7 @@ export function subscribeSupabaseLatest(
   const actuatorStates = new Map<ActuatorKind, ActuatorStateRow>();
   let mode: FsmMode | null = null;
   let modeTs: string | null = null;
+  let rssi: number | null = null;
 
   function emit() {
     if (cancelled) return;
@@ -128,6 +152,7 @@ export function subscribeSupabaseLatest(
       actuators: Array.from(actuatorStates.values()),
       mode,
       mode_ts: modeTs,
+      rssi,
     });
   }
 
@@ -183,13 +208,14 @@ export function subscribeSupabaseLatest(
         .eq('house_id', houseId)
         .order('ts', { ascending: false })
         .limit(EVENT_HISTORY_LIMIT),
-      client.from('houses').select('last_mode,last_mode_ts').eq('id', houseId).maybeSingle(),
+      selectHouse(client, houseId),
     ]);
     if (cancelled) return false;
     if (readingsRes.error || eventsRes.error || houseRes.error) return false;
 
     mode = (houseRes.data?.last_mode as FsmMode | null) ?? null;
     modeTs = houseRes.data?.last_mode_ts ?? null;
+    rssi = houseRes.data?.last_rssi ?? null;
 
     for (const row of readingsRes.data ?? []) {
       const meta = sensorMeta.get(row.sensor_id);
