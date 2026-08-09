@@ -36,6 +36,7 @@ bool supabase_post_alert(const char *code, const char *severity, const char *mes
 bool supabase_fetch_alert_config();
 // code นี้เปิดแจ้งเตือนอยู่ไหม (default true ถ้ายังไม่โหลด/ไม่รู้จัก — fail-safe ไม่พลาด alert)
 // ⚠️ คุมแค่ "การแจ้งเตือน" — safety interlock ใน control/safety ไม่ขึ้นกับค่านี้
+bool supabase_alert_config_loaded();
 bool supabase_alert_enabled(const char *code);
 // ค่าเกณฑ์ที่ตั้งไว้สำหรับ code นี้ (NAN ถ้ายังไม่โหลด/ไม่มีเกณฑ์ — caller fallback เป็น setpoint)
 float supabase_alert_threshold(const char *code);

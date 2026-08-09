@@ -253,6 +253,9 @@ bool supabase_fetch_alert_config() {
   return true;
 }
 
+// โหลด alert_config สำเร็จอย่างน้อย 1 ครั้งแล้วหรือยัง — ก่อนหน้านั้น enabled/threshold ยังไม่รู้จริง
+bool supabase_alert_config_loaded() { return alert_cfg_n > 0; }
+
 bool supabase_alert_enabled(const char *code) {
   for (int i = 0; i < alert_cfg_n; i++) if (!strcmp(alert_cfg[i].code, code)) return alert_cfg[i].enabled;
   return true;   // ไม่รู้จัก/ยังไม่โหลด = แจ้งเตือน (fail-safe: ไม่พลาด alert)

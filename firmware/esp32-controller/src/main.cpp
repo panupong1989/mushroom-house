@@ -90,23 +90,35 @@ static void persist_events(const ActuatorState &cur) {
 //    RH นอกช่วง = warn (แจ้งอย่างเดียว) · น้ำต่ำ/กองร้อน/อากาศร้อน = critical
 // โพสต์ตอน "ข้ามเกณฑ์" (ขอบขาขึ้น) กัน spam · เคารพ toggle เปิด/ปิด · ค่าเกณฑ์จาก alert_config
 //    ถ้ายังไม่โหลด (NAN) fallback เป็น setpoint (คงพฤติกรรมเดิม ไม่พลาด alert วิกฤต)
-static bool alert_active[5] = { false, false, false, false, false };
+#define N_ALERT_CHK 7
+static bool alert_active[N_ALERT_CHK] = { false, false, false, false, false, false, false };
 static void notify_check(const SensorSnapshot &s, const Setpoints &sp) {
   if (!net_online() || !supabase_ids_ready()) return;   // โพสต์ต้องมีเน็ต + resolve ids แล้ว
+  // ต้องโหลด alert_config สำเร็จอย่างน้อยครั้งหนึ่งก่อน ไม่งั้น supabase_alert_enabled() คืน true
+  // (fail-safe) แล้ว code ที่ผู้ใช้ "ปิดไว้" จะถูกยิงซ้ำทุกครั้งที่บอร์ดรีบูต/ก่อนดึง config สำเร็จ
+  // — เจอจริงหน้างาน: LOW_WATER ปิดอยู่แต่ยังเด้ง (Beer 9 ส.ค.)
+  // ปลอดภัย: กันแค่ "การแจ้งเตือน" ไม่ใช่ interlock — ตัดปั๊ม/heater ยังทำงานทันทีเสมอใน safety.cpp
+  if (!supabase_alert_config_loaded()) return;
+
   float thHot  = supabase_alert_threshold("HOT");          if (isnan(thHot))  thHot  = sp.temp_danger_hot;
+  float thCold = supabase_alert_threshold("COLD");         if (isnan(thCold)) thCold = sp.temp_heater_on;
   float thBed  = supabase_alert_threshold("BED_OVERHEAT"); if (isnan(thBed))  thBed  = sp.bed_danger;
+  float thBedLo= supabase_alert_threshold("BED_LOW");
   float thRhHi = supabase_alert_threshold("RH_HIGH");      if (isnan(thRhHi)) thRhHi = sp.rh_max;
   float thRhLo = supabase_alert_threshold("RH_LOW");       if (isnan(thRhLo)) thRhLo = sp.rh_min;
 
   struct Chk { const char *code; bool cond; const char *sev; };
-  const Chk chk[5] = {
-    { "LOW_WATER",    !s.water_ok,                                          "critical" },
-    { "HOT",          !isnan(s.air_temp_ctrl) && s.air_temp_ctrl >= thHot,  "critical" },
-    { "BED_OVERHEAT", !isnan(s.bed_temp_max)  && s.bed_temp_max  >= thBed,  "critical" },
-    { "RH_HIGH",      !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    > thRhHi, "warn" },
-    { "RH_LOW",       !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    < thRhLo, "warn" },
+  const Chk chk[N_ALERT_CHK] = {
+    { "LOW_WATER",    !s.water_ok,                                            "critical" },
+    { "HOT",          !isnan(s.air_temp_ctrl) && s.air_temp_ctrl >= thHot,    "critical" },
+    { "COLD",         !isnan(s.air_temp_ctrl) && s.air_temp_ctrl <  thCold,   "warn" },
+    { "BED_OVERHEAT", !isnan(s.bed_temp_max)  && s.bed_temp_max  >= thBed,    "critical" },
+    // BED_LOW ไม่มี fallback setpoint (ไม่มีคู่ใน Setpoints) — ไม่ตั้งเกณฑ์ใน alert_config = ไม่เช็ก
+    { "BED_LOW",      !isnan(thBedLo) && !isnan(s.bed_temp_max) && s.bed_temp_max < thBedLo, "warn" },
+    { "RH_HIGH",      !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    > thRhHi,   "warn" },
+    { "RH_LOW",       !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    < thRhLo,   "warn" },
   };
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < N_ALERT_CHK; i++) {
     if (chk[i].cond) {
       if (!alert_active[i]) {                             // ขอบขาขึ้น — เพิ่งข้ามเกณฑ์
         alert_active[i] = true;
