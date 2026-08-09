@@ -277,6 +277,10 @@ bool supabase_update_house_mode(const char *mode, const char *iso_or_null) {
   JsonObject o = doc.to<JsonObject>();
   o["last_mode"] = mode;
   if (iso_or_null && *iso_or_null) o["last_mode_ts"] = iso_or_null;
+  // ความแรงสัญญาณ WiFi (dBm ติดลบ) ให้ dashboard โชว์บนแถบสถานะ — houses.last_rssi (migration 013)
+  // net_rssi() คืน 0 ตอนไม่ online ซึ่งเป็นค่าที่เป็นไปไม่ได้จริง เลยส่งเฉพาะตอนต่อ WiFi ได้
+  int8_t rssi = net_rssi();
+  if (rssi != 0) o["last_rssi"] = rssi;
   String body; serializeJson(doc, body);
   int code = http.sendRequest("PATCH", body);
   http.end();
