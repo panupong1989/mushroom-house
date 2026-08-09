@@ -338,18 +338,42 @@ export async function fetchSupabaseAirHistory(houseId: string, range: HistoryRan
 // (ตาราง sensors, supabase/migrations/005_real_sensors.sql) anon อ่านได้ตาม RLS เดิม
 export async function fetchSupabaseSensorMeta(houseId: string, kind: string): Promise<SensorMetaRow[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('sensors')
-    .select('id,location,row_no,tier')
-    .eq('house_id', houseId)
-    .eq('kind', kind);
-  if (error || !data) return [];
-  return data.map((row) => ({
+  const client = supabase;
+  type MetaRaw = {
+    id: number;
+    location: string | null;
+    row_no?: number | null;
+    tier?: string | null;
+    rom_id?: string | null;
+    enabled?: boolean | null;
+    ui_position?: string | null;
+  };
+  const toRow = (row: MetaRaw): SensorMetaRow => ({
     id: row.id,
-    location: row.location,
+    // ui_position (แก้ได้จากหน้าเว็บ) ชนะ location (คีย์ routing ของเฟิร์มแวร์) — ดู migration 011
+    location: row.ui_position ?? row.location,
     rowNo: row.row_no ?? null,
     tier: row.tier ?? null,
-  }));
+    romId: row.rom_id ?? null,
+    enabled: row.enabled !== false,
+  });
+
+  // ทนต่อ migration 011 ที่ยังไม่ได้รัน (คอลัมน์ enabled/ui_position) — ถอยไป select ชุดเดิม
+  const full = await client
+    .from('sensors')
+    .select('id,location,row_no,tier,rom_id,enabled,ui_position')
+    .eq('house_id', houseId)
+    .eq('kind', kind);
+  if (!full.error) return ((full.data ?? []) as MetaRaw[]).map(toRow);
+  if (!isMissingColumn(full.error)) return [];
+
+  const legacy = await client
+    .from('sensors')
+    .select('id,location,row_no,tier,rom_id')
+    .eq('house_id', houseId)
+    .eq('kind', kind);
+  if (legacy.error) return [];
+  return ((legacy.data ?? []) as MetaRaw[]).map(toRow);
 }
 
 interface RpcSensorHistoryRow {

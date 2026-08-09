@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { seriesBounds, timeTicks, valueTicks, type Point } from '@/lib/history';
 import { fmtNum } from '@/lib/format';
 
@@ -45,22 +48,74 @@ export function MultiLineChart({
   secondaryDigits?: number;
   height?: number;
 }) {
+  // เส้นที่ผู้ใช้ติ๊กออก (เก็บเป็น "ตัวที่ซ่อน" เพื่อให้ค่าเริ่มต้น = ติ๊กครบทุกเส้น และเส้นที่
+  // เพิ่งโผล่มาใหม่ก็ติ๊กอยู่แล้วโดยอัตโนมัติ)
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const toggle = (key: string) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   // ซ่อนเส้นที่ "ไม่มีข้อมูลเลย" (เช่น เซนเซอร์ผีที่ค้างใน DB — air_th 'mid' ที่ไม่มีจริง)
   // ไม่ให้รก legend + เส้น · เหลือเฉพาะจุดที่มีค่าจริง
-  const series = allSeries.filter((s) => s.points.length > 0);
+  const available = allSeries.filter((s) => s.points.length > 0);
+  const series = available.filter((s) => !hidden.has(s.key));
   const primary = series.filter((s) => (s.axis ?? 'primary') === 'primary');
   const secondary = series.filter((s) => s.axis === 'secondary');
   const primaryBounds = seriesBounds(primary.flatMap((s) => s.points), primaryUnit === '%' ? 2 : 0.5);
   const secondaryBounds = seriesBounds(secondary.flatMap((s) => s.points), secondaryUnit === '%' ? 2 : 0.5);
   const hasData = series.some((s) => s.points.length >= 2);
 
+  // legend ต้องเรนเดอร์เสมอ แม้ไม่มีเส้นให้วาด — ไม่งั้นติ๊กออกครบแล้วจะไม่มีที่ให้ติ๊กกลับ
+  const legend = (
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 lg:gap-x-5">
+      {available.map((s) => {
+        const on = !hidden.has(s.key);
+        return (
+          <label
+            key={s.key}
+            className={`flex cursor-pointer select-none items-center gap-1 text-[10px] lg:text-xs ${on ? 'text-gray-500' : 'text-gray-300'}`}
+          >
+            <input
+              type="checkbox"
+              checked={on}
+              onChange={() => toggle(s.key)}
+              className="h-3 w-3 cursor-pointer accent-gray-500"
+              aria-label={`แสดงเส้น ${s.label}`}
+            />
+            <span
+              className="inline-block h-0 w-3 border-t-2"
+              style={{
+                borderColor: on ? s.color : '#d1d5db',
+                borderStyle: s.dashed ? 'dashed' : 'solid',
+              }}
+            />
+            {s.label}
+            {on && s.points.length > 0 && (
+              <span className="font-medium" style={{ color: s.color }}>
+                {fmtNum(s.points[s.points.length - 1].v, s.axis === 'secondary' ? secondaryDigits : primaryDigits)}
+                {s.axis === 'secondary' ? secondaryUnit : primaryUnit}
+              </span>
+            )}
+          </label>
+        );
+      })}
+    </div>
+  );
+
   if (!hasData || !primaryBounds) {
     return (
-      <div
-        className="flex items-center justify-center rounded-xl2 bg-bg text-xs text-gray-400"
-        style={{ height: Math.max(110, height - 40) }}
-      >
-        ยังไม่มีข้อมูล
+      <div>
+        <div
+          className="flex items-center justify-center rounded-xl2 bg-bg text-xs text-gray-400"
+          style={{ height: Math.max(110, height - 40) }}
+        >
+          {available.length > 0 ? 'ติ๊กเลือกเส้นที่จะดูด้านล่าง' : 'ยังไม่มีข้อมูล'}
+        </div>
+        {legend}
       </div>
     );
   }
@@ -191,23 +246,7 @@ export function MultiLineChart({
           </span>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 lg:gap-x-5">
-        {series.map((s) => (
-          <span key={s.key} className="flex items-center gap-1 text-[10px] text-gray-500 lg:text-xs">
-            <span
-              className="inline-block h-0 w-3 border-t-2"
-              style={{ borderColor: s.color, borderStyle: s.dashed ? 'dashed' : 'solid' }}
-            />
-            {s.label}
-            {s.points.length > 0 && (
-              <span className="font-medium" style={{ color: s.color }}>
-                {fmtNum(s.points[s.points.length - 1].v, s.axis === 'secondary' ? secondaryDigits : primaryDigits)}
-                {s.axis === 'secondary' ? secondaryUnit : primaryUnit}
-              </span>
-            )}
-          </span>
-        ))}
-      </div>
+      {legend}
     </div>
   );
 }

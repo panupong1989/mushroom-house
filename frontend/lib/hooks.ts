@@ -6,7 +6,7 @@ import { fetchAlerts, fetchConfig, fetchLatest, fetchSensorHistory, fetchSensorM
 import { SUPABASE_ENABLED, supabase } from './supabaseClient';
 import { subscribeBedScan, subscribeSupabaseAlerts, subscribeSupabaseLatest } from './supabaseData';
 import { buildMockBedScan } from './mock';
-import { POLL_INTERVAL_MS } from './constants';
+import { HISTORY_REFRESH_MS, POLL_INTERVAL_MS } from './constants';
 import type { RangeKey, SensorSeriesRow } from './history';
 import type { AlertRow, BedScanRow, ConfigResponse, LatestResponse, SensorMetaRow } from './types';
 
@@ -188,16 +188,30 @@ export function useAlerts(houseId: string): AlertsState {
   return state;
 }
 
-// metadata เซนเซอร์ต่อ kind (id/location/row_no/tier) — เปลี่ยนไม่บ่อย โหลดครั้งเดียวตอน mount/เปลี่ยน kind
+// "จุดนี้ใช้งานจริง" — DS18B20 (bed_temp/outside_temp) ต้องจับคู่ ROM ไว้ด้วย ไม่งั้นเป็นตำแหน่งที่
+// ยังไม่ติดตั้ง/ถอดออกแล้ว · air_th/water_level ไม่มี ROM ดูแค่ธง enabled
+// (mock/dev ไม่มี rom_id ให้ถือว่าใช้งานหมด)
+function sensorInUse(m: SensorMetaRow, kind: string): boolean {
+  if (!m.enabled) return false;
+  if (kind === 'bed_temp' || kind === 'outside_temp') return m.romId != null;
+  return true;
+}
+
+// metadata เซนเซอร์ต่อ kind (id/location/row_no/tier) — เปลี่ยนได้จากหน้าจับคู่ จึงดึงซ้ำเป็นระยะ
+// พร้อมกับกราฟ ไม่งั้นแก้ mapping แล้วเส้นผีของจุดที่ปลดออกยังค้างอยู่จนกว่าจะรีเฟรชหน้า
 export function useSensorMeta(houseId: string, kind: string): SensorMetaRow[] {
   const [meta, setMeta] = useState<SensorMetaRow[]>([]);
   useEffect(() => {
     let cancelled = false;
-    fetchSensorMeta(houseId, kind).then((rows) => {
-      if (!cancelled) setMeta(rows);
-    });
+    const load = () =>
+      fetchSensorMeta(houseId, kind).then((rows) => {
+        if (!cancelled) setMeta(rows.filter((m) => sensorInUse(m, kind)));
+      });
+    load();
+    const id = setInterval(load, HISTORY_REFRESH_MS);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, [houseId, kind]);
   return meta;
@@ -210,20 +224,49 @@ export interface SensorHistoryState {
 }
 
 // กราฟย้อนหลังต่อเซนเซอร์ — โหลดใหม่ทุกครั้งที่ range/endMs (date picker) เปลี่ยน
+// และ (สำคัญ) ดึงซ้ำเป็นระยะเมื่อดูช่วง "ย้อนหลังจากตอนนี้" (endMs = null) เพราะขอบขวาของกราฟ
+// เลื่อนตามเวลาจริงทุกวินาที (domainMax = now) ถ้าไม่ดึงใหม่ เส้นจะค้างแล้วดูเหมือนขาดช่วง
+// ทางขวาเรื่อยๆ จนกว่าจะสลับแท็บ/เปลี่ยนช่วง (ที่ทำให้ effect รันใหม่)
+// ดูวันที่เจาะจง (endMs != null) = ข้อมูลอดีตนิ่งแล้ว ไม่ต้อง poll
 export function useSensorHistory(houseId: string, kind: string, range: RangeKey, endMs: number | null): SensorHistoryState {
   const [state, setState] = useState<SensorHistoryState>({ rows: [], loading: true, error: false });
   useEffect(() => {
     let cancelled = false;
-    setState((s) => ({ ...s, loading: true, error: false }));
-    fetchSensorHistory(houseId, kind, range, endMs)
-      .then((rows) => {
+    let inFlight = false;
+
+    // first = โหลดครั้งแรกของช่วงนี้ (โชว์ "กำลังโหลด…") · รอบ poll ถัดไปอัปเดตเงียบๆ ไม่กะพริบ
+    async function load(first: boolean) {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      if (first) setState((s) => ({ ...s, loading: true, error: false }));
+      try {
+        const rows = await fetchSensorHistory(houseId, kind, range, endMs);
         if (!cancelled) setState({ rows, loading: false, error: false });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ rows: [], loading: false, error: true });
-      });
+      } catch {
+        // poll ที่พลาดชั่วคราวไม่ต้องล้างกราฟที่แสดงอยู่ — ขึ้น error เฉพาะตอนโหลดครั้งแรกไม่ผ่าน
+        if (!cancelled && first) setState({ rows: [], loading: false, error: true });
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    load(true);
+    if (endMs !== null) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const id = setInterval(() => load(false), HISTORY_REFRESH_MS);
+    // กลับมาเปิดแท็บ/ปลดล็อกจอ → ดึงทันที ไม่ต้องรอครบรอบ
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load(false);
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [houseId, kind, range, endMs]);
   return state;

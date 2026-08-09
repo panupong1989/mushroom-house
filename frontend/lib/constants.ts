@@ -65,3 +65,6 @@ export const OFFLINE_THRESHOLD_MS = 90_000;
 export const LATEST_REFRESH_MS = 30_000;
 // live scan (bed_scan) ต้องสดกว่า — ESP32 push ทุก ~5 วิ และหน้าจับคู่ตัดสินจาก "ค่าพุ่ง" ตอนกำเซนเซอร์
 export const BED_SCAN_REFRESH_MS = 5_000;
+// กราฟย้อนหลัง: ดึงซ้ำทุก 30 วิ เมื่อดูช่วง "ย้อนหลังจากตอนนี้" (bucket เล็กสุดคือ 1 นาที ที่ช่วง 1 ชม.
+// จึงไม่ต้องถี่กว่านี้) — กันเส้นค้างขาดช่วงเวลาเปิดหน้าทิ้งไว้
+export const HISTORY_REFRESH_MS = 30_000;

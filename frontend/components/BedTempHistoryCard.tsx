@@ -6,6 +6,7 @@ import { RangeControls } from './RangeControls';
 import { MultiLineChart, type ChartSeries } from './MultiLineChart';
 import { useChartHeight, useNow, useSensorHistory, useSensorMeta } from '@/lib/hooks';
 import { RANGE_META, endOfDayMs, seriesToPoints, type RangeKey } from '@/lib/history';
+import { TIER_LABELS } from '@/lib/maintenance';
 import { MOCK_SENSOR_META, buildDemoSensorSeries } from '@/lib/mock';
 
 // สีตามแถว (row_no) แยกให้ดูออกว่าแถวไหน — แถว 1 = โทนส้ม/อำพัน, แถว 2 = โทนฟ้า/น้ำเงิน
@@ -15,9 +16,8 @@ const ROW_COLORS: Record<number, [string, string, string]> = {
   2: ['#0ea5e9', '#0284c7', '#0369a1'],
 };
 const TIER_ORDER = ['top', 'mid', 'bottom'];
-const TIER_LABEL: Record<string, string> = { top: 'หัว', mid: 'กลาง', bottom: 'ท้าย' };
 
-// ชุดที่ 1 — อุณหภูมิในกอง 6 เส้น (2 แถว x หัว/กลาง/ท้าย)
+// ชุดที่ 1 — อุณหภูมิในกอง เส้นละจุด (เฉพาะจุดที่จับคู่โพรบไว้จริง — useSensorMeta กรองให้แล้ว)
 export function BedTempHistoryCard({ houseId, demoMode = false }: { houseId: string; demoMode?: boolean }) {
   const [range, setRange] = useState<RangeKey>('24h');
   const [dateStr, setDateStr] = useState('');
@@ -39,18 +39,20 @@ export function BedTempHistoryCard({ houseId, demoMode = false }: { houseId: str
   const loading = demoMode ? false : live.loading;
   const error = demoMode ? false : live.error;
 
-  const series: ChartSeries[] = meta
+  const bedMeta = meta
     .filter((m) => m.rowNo != null && m.tier != null)
-    .sort((a, b) => (a.rowNo! - b.rowNo!) || (TIER_ORDER.indexOf(a.tier!) - TIER_ORDER.indexOf(b.tier!)))
+    .sort((a, b) => (a.rowNo! - b.rowNo!) || (TIER_ORDER.indexOf(a.tier!) - TIER_ORDER.indexOf(b.tier!)));
+
+  const series: ChartSeries[] = bedMeta
     .map((m) => ({
       key: `${m.rowNo}-${m.tier}`,
-      label: `แถว ${m.rowNo} · ${TIER_LABEL[m.tier!] ?? m.tier}`,
+      label: `แถว ${m.rowNo} · ${TIER_LABELS[m.tier!] ?? m.tier}`,
       color: ROW_COLORS[m.rowNo as number]?.[TIER_ORDER.indexOf(m.tier!)] ?? '#9ca3af',
       points: seriesToPoints(rows, m.id, 'temp', 'max'),
     }));
 
   return (
-    <Card title="🌾 อุณหภูมิในกอง (6 จุด)">
+    <Card title={`🌾 อุณหภูมิในกอง (${bedMeta.length} จุด)`}>
       <RangeControls
         range={range}
         onRangeChange={setRange}

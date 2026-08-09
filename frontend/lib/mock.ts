@@ -43,9 +43,10 @@ const WATER_SENSOR_ID = 7;
 
 // metadata เซนเซอร์ (โหมด mock) — คู่กับ fetchSupabaseSensorMeta (ตาราง sensors จริง) ให้
 // component กราฟย้อนหลัง (lib/hooks.ts useSensorMeta) ใช้ path เดียวกันได้ทั้ง mock/Supabase
+// mock = ติดตั้งครบทุกจุด (enabled + จับคู่ ROM แล้ว) เพื่อให้เห็นกราฟเต็มตอน dev/preview
 export const MOCK_SENSOR_META: (SensorMetaRow & { kind: string })[] = [
-  { id: AIR_SENSOR_ID.head, kind: 'air_th', location: 'head', rowNo: null, tier: null },
-  { id: AIR_SENSOR_ID.tail, kind: 'air_th', location: 'tail', rowNo: null, tier: null },
+  { id: AIR_SENSOR_ID.head, kind: 'air_th', location: 'head', rowNo: null, tier: null, romId: null, enabled: true },
+  { id: AIR_SENSOR_ID.tail, kind: 'air_th', location: 'tail', rowNo: null, tier: null, romId: null, enabled: true },
   ...BED_ROWS.flatMap((rowNo) =>
     BED_LOCATIONS.map((loc) => ({
       id: BED_SENSOR_ID[rowNo][loc],
@@ -53,9 +54,20 @@ export const MOCK_SENSOR_META: (SensorMetaRow & { kind: string })[] = [
       location: loc,
       rowNo,
       tier: BED_TIER[loc],
+      // ค่าอะไรก็ได้ที่ไม่ใช่ null — ตัวกรอง "ใช้งานจริง" ดูแค่ว่าจับคู่ ROM แล้วหรือยัง
+      romId: `mock-rom-${rowNo}-${loc}`,
+      enabled: true,
     }))
   ),
-  { id: OUTSIDE_SENSOR_ID, kind: 'outside_temp', location: 'outside', rowNo: null, tier: null },
+  {
+    id: OUTSIDE_SENSOR_ID,
+    kind: 'outside_temp',
+    location: 'outside',
+    rowNo: null,
+    tier: null,
+    romId: 'mock-rom-outside',
+    enabled: true,
+  },
 ];
 
 function clamp(v: number, lo: number, hi: number): number {

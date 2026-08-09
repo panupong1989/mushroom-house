@@ -46,22 +46,29 @@ export function InOutHistoryCard({ houseId, demoMode = false }: { houseId: strin
     (a, b) => LOC_ORDER.indexOf(a.location ?? '') - LOC_ORDER.indexOf(b.location ?? '')
   );
 
+  // จับคู่ อุณหภูมิ+ความชื้น ของ "จุดเดียวกัน" ให้ติดกันใน legend (อ่านง่ายกว่าแยกเป็นก้อนอุณหภูมิ
+  // ทั้งหมดแล้วค่อยก้อนความชื้น) — ตามที่ Beer ขอ 8 ส.ค.
   const series: ChartSeries[] = [
-    ...sortedAir.map((m) => ({
-      key: `temp-${m.id}`,
-      label: `ในโรง${LOCATION_LABELS[m.location ?? ''] ?? m.location} · อุณหภูมิ`,
-      color: IN_TEMP_COLOR[m.location ?? ''] ?? '#ef4444',
-      axis: 'primary' as const,
-      points: seriesToPoints(airRows, m.id, 'temp', 'max'),
-    })),
-    ...sortedAir.map((m) => ({
-      key: `rh-${m.id}`,
-      label: `ในโรง${LOCATION_LABELS[m.location ?? ''] ?? m.location} · ความชื้น`,
-      color: IN_RH_COLOR[m.location ?? ''] ?? '#0ea5e9',
-      dashed: true,
-      axis: 'secondary' as const,
-      points: seriesToPoints(airRows, m.id, 'rh', 'avg'),
-    })),
+    ...sortedAir.flatMap((m) => {
+      const name = `ในโรง${LOCATION_LABELS[m.location ?? ''] ?? m.location}`;
+      return [
+        {
+          key: `temp-${m.id}`,
+          label: `${name} · อุณหภูมิ`,
+          color: IN_TEMP_COLOR[m.location ?? ''] ?? '#ef4444',
+          axis: 'primary' as const,
+          points: seriesToPoints(airRows, m.id, 'temp', 'max'),
+        },
+        {
+          key: `rh-${m.id}`,
+          label: `${name} · ความชื้น`,
+          color: IN_RH_COLOR[m.location ?? ''] ?? '#0ea5e9',
+          dashed: true,
+          axis: 'secondary' as const,
+          points: seriesToPoints(airRows, m.id, 'rh', 'avg'),
+        },
+      ];
+    }),
     ...outsideMeta.map((m) => ({
       key: `outside-${m.id}`,
       label: 'นอกโรง · อุณหภูมิ',

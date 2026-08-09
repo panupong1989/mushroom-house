@@ -61,6 +61,10 @@ export interface SensorMetaRow {
   location: string | null;
   rowNo: number | null; // เฉพาะ bed_temp โรง 2 แถว (supabase/migrations/005_real_sensors.sql)
   tier: string | null; // 'top' | 'mid' | 'bottom' เฉพาะ bed_temp
+  // "จุดนี้ใช้งานจริงไหม" — กราฟย้อนหลังต้องกรองด้วย ไม่งั้นจุดที่ปลด ROM/ปิดไปแล้วยังโผล่เส้นผี
+  // จากค่าเก่าที่ค้างใน sensor_readings (ดู lib/hooks.ts useSensorMeta)
+  romId: string | null; // เฉพาะ bed_temp/outside_temp — null = ยังไม่จับคู่โพรบ
+  enabled: boolean; // sensors.enabled (migration 011) — false = ไม่ได้ติดตั้ง
 }
 
 // ตาราง bed_scan (supabase/migrations/007_maintenance.sql) — live ROM ที่ ESP32 เจอบนบัส 1-Wire
