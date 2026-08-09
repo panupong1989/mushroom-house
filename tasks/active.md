@@ -68,7 +68,10 @@
   ❌ ป้ายในหน้าเว็บจะผิดทันที และยังเลือกรายตัวไม่ได้
 - **ทาง B (ถูกต้องกว่า):** ย้ายการตัดสินใจ "เข้า LINE ไหม" ลง DB เป็นคอลัมน์ต่อ code
   ✅ หน้าเว็บแสดงความจริง + เลือกรายตัวได้ + ตรงกับที่ Beer ย้ำเรื่องความยืดหยุ่น
-  ➡️ **เลือกทาง B** (กำลังจะลงมือตอนถูกสั่งหยุด)
+
+➡️ **Beer เลือกทาง B (9 ส.ค.)** — ทำเสร็จแล้ว `94da60a` + `dcb88f0` · ย้ำเงื่อนไข: "สูงเกินก็แจ้ง
+ต่ำเกินก็แจ้ง" → `notify_line` default = **true ทุกชนิด** (ทั้ง COLD/BED_LOW/RH_LOW เข้า LINE ทันที
+ที่รัน migration) ใครไม่อยากได้ตัวไหนค่อยปิดเองจากหน้าเว็บ
 
 ## Disproven Hypotheses
 
@@ -207,13 +210,17 @@ Migration ที่รันบน Supabase แล้ว: **006–014 ครบ*
 
 ## Definition of Done
 
-- [ ] เลือกทาง A หรือ B
-- [ ] ถ้าทาง B: migration 015 + notify-line อ่าน `notify_line` + UI เป็น toggle จริง
-- [ ] ป้าย/toggle ในหน้าเว็บสะท้อนความจริง ไม่ใช่เดาจาก severity
-- [ ] กด 🧪 ทดสอบ ฝั่ง "ต่ำ" แล้วเด้ง LINE ได้
-- [ ] `tsc` + `npm test` + `next lint` + `next build` ผ่าน
-- [ ] (แยกงาน) flash บอร์ด → `สัญญาณบอร์ด` มีค่า + alert ที่ปิดไว้เลิกเด้ง
+- [x] เลือกทาง A หรือ B — **Beer เลือก B**
+- [x] migration 015 + notify-line อ่าน `notify_line` + UI เป็น toggle จริง
+- [x] toggle ในหน้าเว็บสะท้อนความจริง ไม่ใช่เดาจาก severity (ป้าย severity เหลือแค่บอกความเร่งด่วน)
+- [x] `tsc` + `npm test` (92) + `next lint` + `next build` ผ่าน
+- [ ] **ค้างที่ Beer: รัน migration 015 บน Supabase** — ก่อนรัน ปุ่ม LINE จะกดบันทึกไม่ผ่าน
+      (หน้าเว็บ warn ใน console ว่ายังไม่ได้รัน 015) และ notify-line ยังใช้ `LINE_MIN_SEVERITY` แบบเดิม
+- [ ] **ค้างที่ Beer: deploy notify-line ใหม่** (`supabase functions deploy notify-line`)
+- [ ] หลังรัน 015 + deploy → กด 🧪 ทดสอบ ฝั่ง "ต่ำ" (กองต่ำเกิน / อากาศต่ำเกิน) แล้วต้องเด้ง LINE
+- [ ] (แยกงาน) flash บอร์ด → `สัญญาณบอร์ด` มีค่า + alert ที่ปิดไว้เลิกเด้ง + COLD/BED_LOW ยิงได้จริง
+      (ตอนนี้ตั้งค่าเก็บได้แล้วแต่เฟิร์มแวร์บนบอร์ดยังไม่ยิง 2 code นี้ — ป้าย "รอ flash" ในหน้าเว็บบอกไว้)
 
 ## Last Updated
 
-2026-08-09 · หลัง commit `8e3c297`
+2026-08-09 · หลัง commit `dcb88f0` (ทาง B เสร็จฝั่งโค้ด เหลือรัน migration + deploy function)
