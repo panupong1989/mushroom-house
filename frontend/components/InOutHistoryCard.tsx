@@ -73,7 +73,6 @@ export function InOutHistoryCard({ houseId, demoMode = false }: { houseId: strin
       key: `outside-${m.id}`,
       label: 'นอกโรง · อุณหภูมิ',
       color: OUTSIDE_COLOR,
-      dashed: true,
       axis: 'primary' as const,
       points: seriesToPoints(outsideRows, m.id, 'temp', 'max'),
     })),
