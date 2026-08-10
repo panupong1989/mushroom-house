@@ -8,6 +8,8 @@
 //                                เหมาะกับ OA ส่วนตัวที่มีแค่เจ้าของ+คนในบ้านเป็นเพื่อน)
 //   LINE_MIN_SEVERITY          = (optional) info|warn|critical — ใช้เป็น "ทางสำรอง" เท่านั้น
 //                                (ดูหมายเหตุเรื่องลำดับการตัดสินใจด้านล่าง) default critical
+//   LINE_DEDUP_MINUTES         = (optional) กันข้อความซ้ำ: ถ้า (house_id, code) เดิมเพิ่งมี alert
+//                                ภายในกี่นาที ให้ข้ามไม่ push ซ้ำ · default 15 · ตั้ง 0 = ปิด dedup
 //   WEBHOOK_SECRET             = (optional) ถ้าตั้ง ต้องส่ง header x-webhook-secret ให้ตรง (กันเรียกมั่ว)
 //
 // ลำดับการตัดสินใจว่าจะส่งเข้า LINE ไหม (migration 015):
@@ -15,8 +17,17 @@
 //      (ไม่เอา LINE_MIN_SEVERITY มาคิดต่อ — ไม่งั้นตั้งใน UI แล้วโดน secret บล็อกเงียบๆ อีก)
 //   2) อ่านได้แต่ไม่มีแถวของ code นั้น -> ส่ง (fail-safe: ยอมส่งเกินดีกว่าพลาดแจ้งเตือน)
 //   3) อ่าน DB ไม่ได้เลย -> ถอยไปใช้ LINE_MIN_SEVERITY แบบเดิม
+//   4) ผ่านข้อ 1-3 แล้ว ค่อยเช็ค dedup (ด้านล่าง)
+//
+// ทำไมต้อง dedup (10 ส.ค. 69):
+//   ค่าที่แกว่งคาบเกณฑ์ทำให้ ESP32 ยิง alert ซ้ำรัวๆ — HOT เกิด 3 แถวใน 36 วิ (id 184-186)
+//   ตอนอุณหภูมิเด้ง 32.9 <-> 33.0 ที่เกณฑ์ 33.0 · เฟิร์มแวร์ตรวจ "ขอบขาขึ้น" แต่ไม่มี hysteresis
+//   ค่าตกใต้เกณฑ์รอบเดียวก็รีเซ็ตขอบแล้วยิงใหม่ (RH_HIGH เคยยิง 18 ครั้งใน 12 นาที)
+//   ต้นเหตุจริงแก้ที่เฟิร์มแวร์ (hysteresis + cooldown) แต่ต้องเอาบอร์ดไปแฟลชหน้างาน (ไม่มี OTA)
+//   ชั้นนี้จึงกันที่ปลายทางไว้ก่อน — และถึงแฟลชแล้วก็ยังคุ้มเก็บไว้เป็นตาข่ายชั้นสอง
 
 interface AlertRecord {
+  id?: number | string;
   severity?: string;
   code?: string;
   message?: string | null;
@@ -61,6 +72,42 @@ async function notifyLineFlag(houseId: string, code: string): Promise<boolean | 
   }
 }
 
+// มี alert (house_id, code) เดิม "ก่อนหน้าแถวนี้" ภายในกี่นาทีที่กำหนดไหม -> true = ซ้ำ ไม่ต้อง push
+// ตัดแถวปัจจุบันออกด้วย id (webhook ยิงหลัง INSERT แถวนี้ลง DB แล้ว จะนับตัวเองเป็นซ้ำไม่ได้)
+// อ่านไม่ได้/พลาด -> คืน false = ส่ง (fail-safe เหมือนเดิม: ยอมส่งเกินดีกว่าเงียบ)
+async function isDuplicate(rec: AlertRecord, windowMin: number): Promise<boolean> {
+  if (windowMin <= 0) return false;
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key || !rec.house_id || !rec.code) return false;
+
+  // อิงเวลาของแถวนี้เป็นหลัก (เผื่อ webhook มาช้า) ไม่งั้นใช้เวลาปัจจุบัน
+  const baseMs = rec.ts ? Date.parse(rec.ts) : Date.now();
+  const since = new Date((Number.isFinite(baseMs) ? baseMs : Date.now()) - windowMin * 60_000).toISOString();
+
+  // กันแถวตัวเอง: มี id ใช้ id.lt (แม่นกว่า) · ไม่มีก็ใช้ ts.lt
+  const exclude =
+    rec.id !== undefined && rec.id !== null
+      ? `&id=lt.${encodeURIComponent(String(rec.id))}`
+      : rec.ts
+        ? `&ts=lt.${encodeURIComponent(rec.ts)}`
+        : '';
+  if (!exclude) return false; // ไม่รู้ว่าแถวไหนคือตัวเอง -> ไม่เสี่ยงกดทิ้ง
+
+  try {
+    const q =
+      `${url}/rest/v1/alerts?house_id=eq.${encodeURIComponent(rec.house_id)}` +
+      `&code=eq.${encodeURIComponent(rec.code)}&ts=gte.${encodeURIComponent(since)}${exclude}` +
+      `&select=id&order=id.desc&limit=1`;
+    const r = await fetch(q, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+    if (!r.ok) return false;
+    const rows = (await r.json()) as unknown;
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   // กันเรียกมั่ว (ถ้าตั้ง WEBHOOK_SECRET) — Database Webhook ใส่ header นี้ให้ได้
   const secret = Deno.env.get('WEBHOOK_SECRET');
@@ -92,7 +139,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     shouldSend = (SEV_RANK[sev] ?? -1) >= (SEV_RANK[minSev] ?? 2);
   }
   if (!shouldSend) {
-    return new Response(JSON.stringify({ skipped: true, severity: sev, decidedBy }), { status: 200 });
+    return new Response(JSON.stringify({ skipped: true, reason: 'notify_line=false', severity: sev, decidedBy }), {
+      status: 200,
+    });
+  }
+
+  // กันข้อความซ้ำจากค่าที่แกว่งคาบเกณฑ์ — ยกเว้นปุ่ม 🧪 ทดสอบ (ต้องเด้งทุกครั้งที่กด ไม่งั้นเทสแล้วงง)
+  const isTest = (record.message ?? '').includes('🧪');
+  const dedupMin = Number(Deno.env.get('LINE_DEDUP_MINUTES') ?? '15');
+  const windowMin = Number.isFinite(dedupMin) ? dedupMin : 15;
+  if (!isTest && (await isDuplicate(record, windowMin))) {
+    return new Response(
+      JSON.stringify({ skipped: true, reason: 'duplicate', code: record.code, withinMinutes: windowMin }),
+      { status: 200 },
+    );
   }
 
   const token = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN');

@@ -23,7 +23,8 @@ ESP32 (service_role) insert alerts  →  Database Webhook (INSERT)  →  notify-
 ```bash
 supabase link --project-ref <your-ref>
 supabase secrets set LINE_CHANNEL_ACCESS_TOKEN="xxxx"
-supabase secrets set LINE_MIN_SEVERITY="critical"    # optional: info|warn|critical
+supabase secrets set LINE_MIN_SEVERITY="critical"    # optional: info|warn|critical (ทางสำรอง)
+supabase secrets set LINE_DEDUP_MINUTES="15"         # optional: กันข้อความซ้ำ (default 15, 0=ปิด)
 supabase secrets set WEBHOOK_SECRET="สุ่มยาวๆ"        # optional แต่แนะนำ (กันเรียกมั่ว)
 # LINE_TO_IDS: ข้ามได้ (ไม่ตั้ง = broadcast หาเพื่อนทุกคนของ OA)
 supabase functions deploy notify-line --no-verify-jwt
@@ -43,6 +44,19 @@ insert into alerts (house_id, severity, code, message)
 values ('house-01', 'critical', 'LOW_WATER', 'ทดสอบแจ้งเตือน LINE');
 ```
 ควรได้ข้อความเข้า LINE ภายในไม่กี่วินาที — ถ้าไม่เข้า ดู Logs: Dashboard → Edge Functions → notify-line → Logs
+
+## กันข้อความซ้ำ (dedup)
+
+ถ้าค่าเซนเซอร์แกว่งคาบเกณฑ์ ESP32 จะยิง alert รัวๆ (เจอจริง 10 ส.ค. 69: `HOT` เกิด 3 แถวใน 36 วิ
+ตอนอุณหภูมิเด้ง 32.9 ↔ 33.0 ที่เกณฑ์ 33.0 · ก่อนหน้านั้น `RH_HIGH` ยิง 18 ครั้งใน 12 นาที)
+
+function จะ **ข้ามไม่ push** ถ้ามี alert `(house_id, code)` เดิมเกิดขึ้นแล้วภายใน `LINE_DEDUP_MINUTES`
+นาที (default 15) — แถวยังถูกบันทึกใน `alerts` ครบเหมือนเดิม แค่ไม่ยิง LINE ซ้ำ
+
+- ปุ่ม 🧪 **ทดสอบ** ในหน้าตั้งค่า **ไม่โดน dedup** (กดกี่ครั้งก็เด้ง) — ดูจาก `🧪` ใน message
+- ตั้ง `LINE_DEDUP_MINUTES="0"` = ปิด dedup
+- นี่คือการกันที่ **ปลายทาง** · ต้นเหตุจริงคือเฟิร์มแวร์ไม่มี hysteresis → แก้แล้วใน `notify_edge.cpp`
+  (ต้องเอาบอร์ดไปแฟลชหน้างาน โปรเจกต์ไม่มี OTA) · ถึงแฟลชแล้วก็เก็บชั้นนี้ไว้เป็นตาข่ายชั้นสอง
 
 ## หมายเหตุ
 - default ส่งเฉพาะ `critical` (ปรับ `LINE_MIN_SEVERITY`) — กัน spam จาก info/warn
