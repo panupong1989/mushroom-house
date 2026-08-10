@@ -130,6 +130,20 @@
 ### Attempt 7 — ปุ่มบันทึก + ปุ่มทดสอบ (`6aa676c`, migration 014)
 **Result:** ✅ ใช้งานได้ · **Keep**
 
+### Attempt 9 — LINE เด้ง 3 ข้อความซ้อน (`b59f914` + PR #56) — 10 ส.ค.
+**อาการ:** "อากาศร้อนอันตราย" เด้ง 3 ครั้งใน 36 วิ (11:48:30 / 11:48:51 / 11:49:06)
+**วินิจฉัย:** ไม่ใช่ LINE/webhook ส่งซ้ำ — query `alerts` เจอ **3 แถวจริง (id 184-186)**
+`notify_check` ตรวจแค่ "ขอบขาขึ้น" ไม่มี hysteresis · ค่าตกใต้เกณฑ์รอบเดียว (loop 2 วิ) ก็รีเซ็ตขอบ
+เซนเซอร์ RS485 ละเอียด 0.1°C อุณหภูมิเด้ง **32.9 ↔ 33.0** ที่เกณฑ์ 33.0 → ยิงซ้ำ
+(หลักฐาน: `sensor_readings` sensor_id 1 = 32.8 → 32.9 → 33.0 ช่วง 04:44-04:49 UTC)
+**What changed:**
+- `notify-line` — dedup: ข้ามไม่ push ถ้ามี `(house_id, code)` เดิมภายใน `LINE_DEDUP_MINUTES`
+  (default 15) · ยกเว้นปุ่ม 🧪 ทดสอบ · **push main แล้ว ใช้ได้โดยไม่ต้อง flash**
+- PR #56 (firmware) — `notify_edge.{h,cpp}` + hysteresis 0.5°C / 3%RH + cooldown 15 นาที +
+  NAN ไม่รีเซ็ตขอบ + 8 unit test (รวม regression ลำดับค่าจริง 32.8→33.1 ต้องได้ alert เดียว)
+**Result:** ✅ CI เขียว (`pio run` + 14/14 native test) · ⚠️ ชั้นเฟิร์มแวร์ยังรอ flash
+**Keep**
+
 ### Attempt 8 — ป้ายระดับความรุนแรง (`8e3c297`)
 **What changed:** เพิ่ม `severity` ลง `ALERT_CONFIG_CODES` + ป้าย "วิกฤต · เข้า LINE" /
 "เตือน · ไม่เข้า LINE" + test อ่าน SQL migration 014 มาเทียบกันหลุด
@@ -188,13 +202,12 @@ rst:0x1 (POWERON_RESET)          ← ไม่ใช่ TG1WDT_SYS_RESET
 ## Current Git State
 
 ```
-branch: main · sync กับ origin/main แล้ว (ไม่มี commit ค้าง push)
-working tree: สะอาด — ไม่มีไฟล์ modified, ไม่มี diff
+branch: fix/alert-hysteresis (PR #56 รอรีวิว) · main มี b59f914 (notify-line dedup) แล้ว
 untracked: .claude/  backend/package-lock.json  memory/     ← ตั้งใจไม่ commit
-open PRs: ไม่มี (#53, #54 merge แล้ว)
+open PRs: #56 firmware hysteresis + cooldown (CI เขียว รอ Beer รีวิว/merge แล้ว flash)
 ```
 
-Migration ที่รันบน Supabase แล้ว: **006–014 ครบ**
+Migration ที่รันบน Supabase แล้ว: **006–015 ครบ**
 
 ## Remaining Unknowns
 
@@ -214,13 +227,14 @@ Migration ที่รันบน Supabase แล้ว: **006–014 ครบ*
 - [x] migration 015 + notify-line อ่าน `notify_line` + UI เป็น toggle จริง
 - [x] toggle ในหน้าเว็บสะท้อนความจริง ไม่ใช่เดาจาก severity (ป้าย severity เหลือแค่บอกความเร่งด่วน)
 - [x] `tsc` + `npm test` (92) + `next lint` + `next build` ผ่าน
-- [ ] **ค้างที่ Beer: รัน migration 015 บน Supabase** — ก่อนรัน ปุ่ม LINE จะกดบันทึกไม่ผ่าน
-      (หน้าเว็บ warn ใน console ว่ายังไม่ได้รัน 015) และ notify-line ยังใช้ `LINE_MIN_SEVERITY` แบบเดิม
+- [x] **รัน migration 015 บน Supabase** — ยืนยัน 10 ส.ค.: `alert_config.notify_line` มีจริง = true ทั้ง 7 code
 - [ ] **ค้างที่ Beer: deploy notify-line ใหม่** (`supabase functions deploy notify-line`)
+      — ตอนนี้จำเป็นกว่าเดิม เพราะมี dedup กันข้อความซ้ำอยู่ในนั้นด้วย (`b59f914`)
 - [ ] หลังรัน 015 + deploy → กด 🧪 ทดสอบ ฝั่ง "ต่ำ" (กองต่ำเกิน / อากาศต่ำเกิน) แล้วต้องเด้ง LINE
 - [ ] (แยกงาน) flash บอร์ด → `สัญญาณบอร์ด` มีค่า + alert ที่ปิดไว้เลิกเด้ง + COLD/BED_LOW ยิงได้จริง
       (ตอนนี้ตั้งค่าเก็บได้แล้วแต่เฟิร์มแวร์บนบอร์ดยังไม่ยิง 2 code นี้ — ป้าย "รอ flash" ในหน้าเว็บบอกไว้)
 
 ## Last Updated
 
-2026-08-09 · หลัง commit `dcb88f0` (ทาง B เสร็จฝั่งโค้ด เหลือรัน migration + deploy function)
+2026-08-10 · หลัง `b59f914` + PR #56 (แก้ LINE เด้งซ้ำจากค่าแกว่งคาบเกณฑ์ · migration 015 รันแล้ว
+· ค้างที่ Beer: `supabase functions deploy notify-line` + flash บอร์ดเมื่อไปหน้างาน)
