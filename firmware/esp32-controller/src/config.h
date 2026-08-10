@@ -88,6 +88,13 @@ struct Setpoints {
   uint8_t  light_off_hour   = 18;
 };
 
+// ---------- Alert / notify (การแจ้งเตือนล้วน — ไม่ใช่ safety ไม่คุมรีเลย์) ----------
+// hysteresis: ต้องกลับเข้าเขตปลอดภัย "เกินเกณฑ์เท่านี้" ถึงจะนับว่าจบเหตุการณ์ (พร้อมโพสต์รอบใหม่)
+// ไม่งั้นค่าที่แกว่งคาบเกณฑ์จะยิง alert รัว — เจอจริง 10 ส.ค. 69 (HOT 3 ครั้ง/36 วิ ที่เกณฑ์ 33.0)
+#define ALERT_HYS_TEMP_C       0.5f     // °C — เซนเซอร์ RS485 ละเอียด 0.1°C, 0.5 = กันแกว่งได้จริง
+#define ALERT_HYS_RH_PCT       3.0f     // %RH — ความชื้นแกว่งแรงกว่าอุณหภูมิมาก
+#define ALERT_REPOST_MS        (15UL*60UL*1000UL)  // เว้นระยะขั้นต่ำก่อนโพสต์ code เดิมซ้ำ (15 นาที)
+
 // ---------- Timing ----------
 #define CONTROL_PERIOD_MS      2000     // control loop (edge-autonomous)
 #define READINGS_POST_PERIOD_MS 20000   // insert sensor_readings ขึ้น Supabase (15-30s)

@@ -9,6 +9,7 @@
 #include "relays.h"
 #include "safety.h"
 #include "control_fsm.h"
+#include "notify_edge.h"
 #include "nvs_store.h"
 #include "net.h"
 #include "supabase.h"
@@ -90,8 +91,10 @@ static void persist_events(const ActuatorState &cur) {
 //    RH นอกช่วง = warn (แจ้งอย่างเดียว) · น้ำต่ำ/กองร้อน/อากาศร้อน = critical
 // โพสต์ตอน "ข้ามเกณฑ์" (ขอบขาขึ้น) กัน spam · เคารพ toggle เปิด/ปิด · ค่าเกณฑ์จาก alert_config
 //    ถ้ายังไม่โหลด (NAN) fallback เป็น setpoint (คงพฤติกรรมเดิม ไม่พลาด alert วิกฤต)
+// ขอบขาลงต้อง "กลับเข้าเขตปลอดภัยเกิน hysteresis" ถึงนับว่าจบเหตุการณ์ + มี cooldown ต่อ code
+//    (ดู notify_edge.h — ของเดิมค่าตกใต้เกณฑ์รอบเดียวก็ยิงซ้ำได้ทันที)
 #define N_ALERT_CHK 7
-static bool alert_active[N_ALERT_CHK] = { false, false, false, false, false, false, false };
+static AlertEdge alert_edge[N_ALERT_CHK];
 static void notify_check(const SensorSnapshot &s, const Setpoints &sp) {
   if (!net_online() || !supabase_ids_ready()) return;   // โพสต์ต้องมีเน็ต + resolve ids แล้ว
   // ต้องโหลด alert_config สำเร็จอย่างน้อยครั้งหนึ่งก่อน ไม่งั้น supabase_alert_enabled() คืน true
@@ -107,25 +110,31 @@ static void notify_check(const SensorSnapshot &s, const Setpoints &sp) {
   float thRhHi = supabase_alert_threshold("RH_HIGH");      if (isnan(thRhHi)) thRhHi = sp.rh_max;
   float thRhLo = supabase_alert_threshold("RH_LOW");       if (isnan(thRhLo)) thRhLo = sp.rh_min;
 
-  struct Chk { const char *code; bool cond; const char *sev; };
+  const float t = s.air_temp_ctrl, b = s.bed_temp_max, r = s.air_rh_ctrl;
+  const bool tOk = !isnan(t), bOk = !isnan(b), rOk = !isnan(r);
+  const float hT = ALERT_HYS_TEMP_C, hR = ALERT_HYS_RH_PCT;
+  const bool bedLoOk = !isnan(thBedLo);
+
+  // set = ข้ามเกณฑ์ · clear = กลับเข้าเขตปลอดภัยเกิน hysteresis แล้ว
+  // ค่าอ่านไม่ได้ (NAN) = false ทั้งคู่ -> คงสถานะเดิม (ไม่รีเซ็ตขอบ ไม่ยิงซ้ำตอนเซนเซอร์สะดุด)
+  struct Chk { const char *code; bool set_cond; bool clear_cond; const char *sev; };
   const Chk chk[N_ALERT_CHK] = {
-    { "LOW_WATER",    !s.water_ok,                                            "critical" },
-    { "HOT",          !isnan(s.air_temp_ctrl) && s.air_temp_ctrl >= thHot,    "critical" },
-    { "COLD",         !isnan(s.air_temp_ctrl) && s.air_temp_ctrl <  thCold,   "warn" },
-    { "BED_OVERHEAT", !isnan(s.bed_temp_max)  && s.bed_temp_max  >= thBed,    "critical" },
+    { "LOW_WATER",    !s.water_ok,          s.water_ok,                    "critical" },  // ดิจิทัล ไม่ต้อง hys
+    { "HOT",          tOk && t >= thHot,    tOk && t <  thHot  - hT,       "critical" },
+    { "COLD",         tOk && t <  thCold,   tOk && t >  thCold + hT,       "warn" },
+    { "BED_OVERHEAT", bOk && b >= thBed,    bOk && b <  thBed  - hT,       "critical" },
     // BED_LOW ไม่มี fallback setpoint (ไม่มีคู่ใน Setpoints) — ไม่ตั้งเกณฑ์ใน alert_config = ไม่เช็ก
-    { "BED_LOW",      !isnan(thBedLo) && !isnan(s.bed_temp_max) && s.bed_temp_max < thBedLo, "warn" },
-    { "RH_HIGH",      !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    > thRhHi,   "warn" },
-    { "RH_LOW",       !isnan(s.air_rh_ctrl)   && s.air_rh_ctrl    < thRhLo,   "warn" },
+    // (ถ้าเกณฑ์หายไปกลางคัน ให้ clear = true ด้วย ไม่งั้นค้าง active ตลอด)
+    { "BED_LOW",      bedLoOk && bOk && b < thBedLo,
+                      !bedLoOk || (bOk && b > thBedLo + hT),               "warn" },
+    { "RH_HIGH",      rOk && r >  thRhHi,   rOk && r <  thRhHi - hR,       "warn" },
+    { "RH_LOW",       rOk && r <  thRhLo,   rOk && r >  thRhLo + hR,       "warn" },
   };
+
+  const uint32_t now = millis();
   for (int i = 0; i < N_ALERT_CHK; i++) {
-    if (chk[i].cond) {
-      if (!alert_active[i]) {                             // ขอบขาขึ้น — เพิ่งข้ามเกณฑ์
-        alert_active[i] = true;
-        if (supabase_alert_enabled(chk[i].code)) supabase_post_alert(chk[i].code, chk[i].sev, "");
-      }
-    } else {
-      alert_active[i] = false;                            // กลับเข้าช่วงปกติ → รีเซ็ต (ข้ามใหม่ค่อยโพสต์อีก)
+    if (alert_edge_update(alert_edge[i], chk[i].set_cond, chk[i].clear_cond, now, ALERT_REPOST_MS)) {
+      if (supabase_alert_enabled(chk[i].code)) supabase_post_alert(chk[i].code, chk[i].sev, "");
     }
   }
 }
