@@ -230,6 +230,26 @@ export function timeTicks(minMs: number, maxMs: number, target = 5): number[] {
   return out;
 }
 
+// เส้นกริดย่อยถี่ๆ ระหว่าง tick หลักแต่ละคู่ (divisions ช่องย่อยต่อ 1 ช่องกริดหลัก) ใช้ได้ทั้งแกนค่า
+// (valueTicks) และแกนเวลา (timeTicks) เพราะ tick หลักทั้งสองแบบห่างเท่ากันเสมอ (step คงที่) — ยืดออก
+// ไปถึงขอบ [min, max] ด้วย step เดียวกันด้วย เพื่อให้กริดย่อยเต็มพื้นที่กราฟ ไม่ใช่แค่ระหว่าง tick
+// ตัวแรก-ตัวสุดท้าย (ดู issue #57: ต้องการเส้นถี่ๆ "ในช่องใหญ่ทุกช่อง")
+export function minorTicks(ticks: number[], min: number, max: number, divisions = 5): number[] {
+  if (ticks.length < 2 || divisions < 2 || !(max > min)) return [];
+  const step = ticks[1] - ticks[0];
+  if (!(step > 0)) return [];
+  const minorStep = step / divisions;
+  const base = ticks[0];
+  const kMin = Math.ceil((min - base) / minorStep - 1e-9);
+  const kMax = Math.floor((max - base) / minorStep + 1e-9);
+  const out: number[] = [];
+  for (let k = kMin; k <= kMax; k++) {
+    if (k % divisions === 0) continue; // ตรงกับ tick หลักอยู่แล้ว ข้ามไป (กันเส้นซ้อนกัน)
+    out.push(Number((base + k * minorStep).toFixed(6)));
+  }
+  return out;
+}
+
 const THAI_MONTHS_SHORT = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',

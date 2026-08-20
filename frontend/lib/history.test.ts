@@ -4,6 +4,7 @@ import {
   QUICK_RANGE_OPTIONS,
   RANGE_OPTIONS,
   bucketAirHistory,
+  minorTicks,
   rangeDescription,
   seriesBounds,
   timeTicks,
@@ -154,6 +155,41 @@ describe('timeTicks', () => {
   it('ช่วงเสีย → คืน []', () => {
     expect(timeTicks(END, END)).toEqual([]);
     expect(timeTicks(END, END - HOUR_MS)).toEqual([]);
+  });
+});
+
+describe('minorTicks', () => {
+  it('แบ่งช่องระหว่าง tick หลักแต่ละคู่เป็นเส้นย่อยถี่ๆ (divisions-1 เส้นต่อช่อง) และยืดถึงขอบ [min, max]', () => {
+    expect(minorTicks([10, 20, 30], 8, 32, 5)).toEqual([
+      8, 12, 14, 16, 18, 22, 24, 26, 28, 32,
+    ]);
+  });
+
+  it('ไม่ซ้ำตำแหน่ง tick หลัก', () => {
+    const ticks = [10, 20, 30];
+    const minors = minorTicks(ticks, 0, 40, 5);
+    for (const t of ticks) expect(minors).not.toContain(t);
+  });
+
+  it('tick หลักไม่ถึง 2 ตัว หรือ divisions < 2 → คืน []', () => {
+    expect(minorTicks([10], 0, 40)).toEqual([]);
+    expect(minorTicks([], 0, 40)).toEqual([]);
+    expect(minorTicks([10, 20], 0, 40, 1)).toEqual([]);
+  });
+
+  it('ใช้กับ tick แกนเวลาได้เหมือนกัน (step เป็น ms)', () => {
+    const HOUR_MS = 60 * 60 * 1000;
+    const ticks = [0, HOUR_MS, 2 * HOUR_MS];
+    const minors = minorTicks(ticks, 0, 2 * HOUR_MS, 4);
+    expect(minors).toEqual([
+      HOUR_MS * 0.25, HOUR_MS * 0.5, HOUR_MS * 0.75,
+      HOUR_MS * 1.25, HOUR_MS * 1.5, HOUR_MS * 1.75,
+    ]);
+  });
+
+  it('min===max หรือ min>max → คืน []', () => {
+    expect(minorTicks([10, 20], 10, 10)).toEqual([]);
+    expect(minorTicks([10, 20], 20, 10)).toEqual([]);
   });
 });
 
