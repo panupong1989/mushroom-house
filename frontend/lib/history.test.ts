@@ -4,6 +4,7 @@ import {
   QUICK_RANGE_OPTIONS,
   RANGE_OPTIONS,
   bucketAirHistory,
+  minorTicks,
   rangeDescription,
   seriesBounds,
   timeTicks,
@@ -107,6 +108,17 @@ describe('valueTicks', () => {
     for (const t of valueTicks(0.1, 1.9, 8)) {
       expect(String(t).length).toBeLessThanOrEqual(4); // 0.2, 0.4, ... 1.8
     }
+  });
+});
+
+describe('minorTicks', () => {
+  it('คืนจุดกึ่งกลางระหว่าง tick หลักแต่ละคู่', () => {
+    expect(minorTicks([10, 20, 40])).toEqual([15, 30]);
+  });
+
+  it('tick หลักน้อยกว่า 2 ตัว → ไม่มีกริดย่อย', () => {
+    expect(minorTicks([10])).toEqual([]);
+    expect(minorTicks([])).toEqual([]);
   });
 });
 

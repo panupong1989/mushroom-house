@@ -216,6 +216,14 @@ const TIME_TICK_STEPS = [
   TICK_DAY, 2 * TICK_DAY, 4 * TICK_DAY, 7 * TICK_DAY, 14 * TICK_DAY, 30 * TICK_DAY, 60 * TICK_DAY, 90 * TICK_DAY,
 ];
 
+// tick กริดย่อย = จุดกึ่งกลางระหว่าง tick หลักแต่ละคู่ (ใช้ได้ทั้งแกนค่า/แกนเวลา เพราะรับแค่ number[])
+// วาดเป็นเส้นบางๆ คั่นกลาง ช่วยกะค่ากลางกราฟง่ายขึ้นโดยไม่รก (ดู issue: กราฟดูยาก)
+export function minorTicks(ticks: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < ticks.length - 1; i++) out.push((ticks[i] + ticks[i + 1]) / 2);
+  return out;
+}
+
 // tick แกนเวลาใน [minMs, maxMs] จัดแนวตามเวลาท้องถิ่น (เช่น step 6 ชม. → 00:00/06:00/12:00/18:00)
 // ไทยไม่มี DST เลยเลื่อนด้วย timezone offset คงที่ได้ · step ระดับหลายวัน (30/60/90 วัน) จัดแนวจาก
 // epoch → วันที่เริ่มไม่ตายตัวแต่ระยะห่างสม่ำเสมอ (ป้ายโชว์วันที่กำกับอยู่แล้ว ไม่ทำให้เข้าใจผิด)

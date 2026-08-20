@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { seriesBounds, timeTicks, valueTicks, type Point } from '@/lib/history';
+import { minorTicks, seriesBounds, timeTicks, valueTicks, type Point } from '@/lib/history';
 import { fmtNum } from '@/lib/format';
 
 // กราฟเส้นหลายชุดแบบ inline SVG (ไม่พึ่ง library) — responsive ด้วย viewBox
@@ -134,6 +134,9 @@ export function MultiLineChart({
   const tall = height >= 300;
   const yTicks = valueTicks(primaryBounds.min, primaryBounds.max, tall ? 8 : 3);
   const xTicks = timeTicks(domainMin, domainMax, tall ? 8 : 5);
+  // กริดย่อยบางๆ คั่นกลางระหว่าง tick หลัก (ไม่มีป้ายกำกับ) — ช่วยกะค่ากลางกราฟ (ดู issue: กราฟดูยาก)
+  const yMinorTicks = minorTicks(yTicks);
+  const xMinorTicks = minorTicks(xTicks);
   // ป้ายเวลากลางกราฟ: ตัดตัวที่ชิดขอบ (ชนป้ายมุมซ้าย/ขวาเดิม) — มือถือแคบ ต้องเว้นขอบมากกว่า
   const edgePct = tall ? 4 : 12;
   // ค่าแกนรอง (%) ที่ระดับเดียวกับ gridline ของแกนหลัก — โชว์ใต้ป้าย °C ใน gutter ซ้ายคู่กัน
@@ -180,7 +183,32 @@ export function MultiLineChart({
         </div>
         <div className="relative min-w-0 flex-1">
           <svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none" role="img">
-            {/* grid วาดก่อนเส้นข้อมูล (อยู่ใต้เส้น) — non-scaling-stroke กันเส้นยืดตาม viewBox */}
+            {/* grid วาดก่อนเส้นข้อมูล (อยู่ใต้เส้น) — non-scaling-stroke กันเส้นยืดตาม viewBox
+                กริดย่อย (minor) วาดก่อนกริดหลัก บางกว่า+จางกว่า ไม่มีป้ายกำกับ */}
+            {xMinorTicks.map((t) => (
+              <line
+                key={`gxm-${t}`}
+                x1={x(t)}
+                x2={x(t)}
+                y1={PAD_T}
+                y2={height - PAD_B}
+                stroke="#f3f4f6"
+                strokeWidth={0.5}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            {yMinorTicks.map((v) => (
+              <line
+                key={`gym-${v}`}
+                x1={0}
+                x2={W}
+                y1={yPrimary(v)}
+                y2={yPrimary(v)}
+                stroke="#f3f4f6"
+                strokeWidth={0.5}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
             {xTicks.map((t) => (
               <line
                 key={`gx-${t}`}
