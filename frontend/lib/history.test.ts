@@ -4,6 +4,7 @@ import {
   QUICK_RANGE_OPTIONS,
   RANGE_OPTIONS,
   bucketAirHistory,
+  minorTicks,
   rangeDescription,
   seriesBounds,
   timeTicks,
@@ -107,6 +108,30 @@ describe('valueTicks', () => {
     for (const t of valueTicks(0.1, 1.9, 8)) {
       expect(String(t).length).toBeLessThanOrEqual(4); // 0.2, 0.4, ... 1.8
     }
+  });
+});
+
+describe('minorTicks', () => {
+  it('แบ่งแต่ละช่องระหว่าง major tick เป็น 5 ช่องย่อย (ดีฟอลต์) และข้าม tick ที่ซ้ำ major', () => {
+    expect(minorTicks([10, 20, 30], 10, 30)).toEqual([12, 14, 16, 18, 22, 24, 26, 28]);
+  });
+
+  it('ยืด step เดียวกันออกไปถึงขอบ [min, max] แม้ major tick ไม่ถึงขอบ', () => {
+    expect(minorTicks([20, 30], 15, 35)).toEqual([16, 18, 22, 24, 26, 28, 32, 34]);
+  });
+
+  it('ปรับจำนวนช่องย่อยได้ด้วย divisions', () => {
+    expect(minorTicks([0, 10], 0, 10, 4)).toEqual([2.5, 5, 7.5]);
+  });
+
+  it('major tick < 2 ตัว หรือ divisions < 2 → คืน []', () => {
+    expect(minorTicks([], 0, 10)).toEqual([]);
+    expect(minorTicks([5], 0, 10)).toEqual([]);
+    expect(minorTicks([1, 2, 3], 0, 10, 1)).toEqual([]);
+  });
+
+  it('ช่วงเสีย (max<=min) → คืน []', () => {
+    expect(minorTicks([1, 2], 5, 5)).toEqual([]);
   });
 });
 
