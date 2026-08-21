@@ -13,8 +13,10 @@
 //   WEBHOOK_SECRET             = (optional) ถ้าตั้ง ต้องส่ง header x-webhook-secret ให้ตรง (กันเรียกมั่ว)
 //
 // ลำดับการตัดสินใจว่าจะส่งเข้า LINE ไหม (migration 015):
-//   1) อ่าน alert_config.notify_line ของ (house_id, code) -> ถ้าอ่านได้ ใช้ค่านี้เป็นคำตอบสุดท้าย
+//   1) อ่าน alert_config ของ (house_id, code) -> ถ้าอ่านได้ ใช้ค่านี้เป็นคำตอบสุดท้าย
 //      (ไม่เอา LINE_MIN_SEVERITY มาคิดต่อ — ไม่งั้นตั้งใน UI แล้วโดน secret บล็อกเงียบๆ อีก)
+//      1.1) enabled=false (ปิดแจ้งเตือนทั้งชนิด) -> ไม่ส่ง แม้ notify_line=true
+//      1.2) enabled=true  -> ดูที่ notify_line
 //   2) อ่านได้แต่ไม่มีแถวของ code นั้น -> ส่ง (fail-safe: ยอมส่งเกินดีกว่าพลาดแจ้งเตือน)
 //   3) อ่าน DB ไม่ได้เลย -> ถอยไปใช้ LINE_MIN_SEVERITY แบบเดิม
 //   4) ผ่านข้อ 1-3 แล้ว ค่อยเช็ค dedup (ด้านล่าง)
@@ -50,8 +52,15 @@ const CODE_LABEL: Record<string, string> = {
   SENSOR_LOST: 'เซนเซอร์หลุด',
 };
 
-// อ่าน alert_config.notify_line ของ code นี้ (migration 015) ผ่าน PostgREST ด้วย service_role
+// อ่าน alert_config ของ code นี้ (enabled จาก 008 + notify_line จาก 015) ผ่าน PostgREST ด้วย service_role
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY เป็น env ที่ Supabase ใส่ให้ Edge Function อัตโนมัติ
+//
+// ⚠️ ต้องดู enabled ด้วย ไม่ใช่ notify_line อย่างเดียว (เจอจริง 21 ส.ค. 69):
+//    Beer ปิดสวิตช์ "ระดับน้ำต่ำ" (enabled=false) แต่ LINE ยังเด้ง เพราะ notify_line ยังเป็น true
+//    และบอร์ดที่ยังไม่ได้ flash ก็ยัง INSERT แถว LOW_WATER เข้ามาเรื่อยๆ (alerts id 306/308)
+//    → "ปิดทั้งชนิด" ต้องเงียบทุกปลายทาง ไม่ใช่แค่หยุดที่เฟิร์มแวร์
+// ⚠️ ไม่แตะ control/safety — น้ำต่ำยังตัดปั๊มที่ ESP32 เสมอ (safety.cpp) ปิดแค่ "ข้อความ"
+//
 // คืน true/false = อ่านได้ · คืน null = อ่านไม่ได้ (ให้ caller ถอยไปใช้ LINE_MIN_SEVERITY)
 async function notifyLineFlag(houseId: string, code: string): Promise<boolean | null> {
   const url = Deno.env.get('SUPABASE_URL');
@@ -60,12 +69,13 @@ async function notifyLineFlag(houseId: string, code: string): Promise<boolean | 
   try {
     const q =
       `${url}/rest/v1/alert_config?house_id=eq.${encodeURIComponent(houseId)}` +
-      `&code=eq.${encodeURIComponent(code)}&select=notify_line`;
+      `&code=eq.${encodeURIComponent(code)}&select=enabled,notify_line`;
     const r = await fetch(q, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
     if (!r.ok) return null; // รวมกรณี 42703 = ยังไม่ได้รัน migration 015
-    const rows = (await r.json()) as { notify_line?: boolean }[];
+    const rows = (await r.json()) as { enabled?: boolean; notify_line?: boolean }[];
     if (!Array.isArray(rows)) return null;
     if (rows.length === 0) return true; // ไม่มีแถวของ code นี้ = ส่ง (fail-safe ไม่เงียบ)
+    if (rows[0].enabled === false) return false; // ปิดทั้งชนิด = เงียบ ไม่ว่า notify_line เป็นอะไร
     return rows[0].notify_line !== false;
   } catch {
     return null;
@@ -139,7 +149,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     shouldSend = (SEV_RANK[sev] ?? -1) >= (SEV_RANK[minSev] ?? 2);
   }
   if (!shouldSend) {
-    return new Response(JSON.stringify({ skipped: true, reason: 'notify_line=false', severity: sev, decidedBy }), {
+    return new Response(JSON.stringify({ skipped: true, reason: 'alert_config off (enabled/notify_line)', severity: sev, decidedBy }), {
       status: 200,
     });
   }

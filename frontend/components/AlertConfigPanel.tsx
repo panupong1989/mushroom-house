@@ -135,23 +135,29 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
     }
   }
 
-  // ปุ่มทดสอบยิง alert จริงเข้า DB → notify-line อ่าน alert_config.notify_line "ที่บันทึกไว้"
+  // ปุ่มทดสอบยิง alert จริงเข้า DB → notify-line อ่าน alert_config (enabled + notify_line) "ที่บันทึกไว้"
   // จึงต้องบอกผลตามค่าที่บันทึก ไม่ใช่ค่าใน draft (ไม่งั้นข้อความจะโกหกถ้ายังไม่กดบันทึก)
   async function test(code: string, label: string) {
     setTesting(code);
     setMsg(null);
-    const savedLine = saved[code]?.notifyLine ?? true;
-    const pending = draft[code]?.notifyLine !== undefined && draft[code]?.notifyLine !== savedLine;
+    // ปิดทั้งชนิด (enabled=false) = ไม่ส่ง LINE ไม่ว่า notify_line เป็นอะไร — ตรงกับ notifyLineFlag() ใน notify-line
+    const savedEnabled = saved[code]?.enabled ?? true;
+    const savedLine = savedEnabled && (saved[code]?.notifyLine ?? true);
+    const pending =
+      (draft[code]?.notifyLine !== undefined && draft[code]?.notifyLine !== (saved[code]?.notifyLine ?? true)) ||
+      (draft[code]?.enabled !== undefined && draft[code]?.enabled !== savedEnabled);
     const res = await sendTestAlert(houseId, code);
     setTesting(null);
-    const note = pending ? ' · (ค่า LINE ที่เพิ่งแก้ยังไม่ได้บันทึก — การทดสอบใช้ค่าที่บันทึกไว้)' : '';
+    const note = pending ? ' · (ค่าที่เพิ่งแก้ยังไม่ได้บันทึก — การทดสอบใช้ค่าที่บันทึกไว้)' : '';
     setMsg(
       res.ok
         ? {
             kind: 'ok',
             text: savedLine
               ? `ยิงทดสอบ "${label}" แล้ว — ขึ้นในแท็บแจ้งเตือน + เด้ง LINE ภายในไม่กี่วินาที${note}`
-              : `ยิงทดสอบ "${label}" แล้ว — ขึ้นในแท็บแจ้งเตือนอย่างเดียว (ชนิดนี้ปิด "ส่ง LINE" ไว้)${note}`,
+              : `ยิงทดสอบ "${label}" แล้ว — ขึ้นในแท็บแจ้งเตือนอย่างเดียว (ชนิดนี้${
+                  savedEnabled ? 'ปิด "ส่ง LINE" ไว้' : 'ถูกปิดทั้งชนิด จึงไม่ส่ง LINE'
+                })${note}`,
           }
         : { kind: 'err', text: `ยิงทดสอบไม่สำเร็จ — ${res.message ?? 'ตรวจสอบว่ายัง login อยู่ (หรือยังไม่ได้รัน migration 014)'}` }
     );
@@ -166,6 +172,7 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
       <p className="mb-2 text-[11px] text-gray-400">
         ชนิดที่เปิดไว้จะขึ้นในแท็บ &ldquo;แจ้งเตือน&rdquo; เสมอ · ปุ่ม <b>LINE</b> ของแต่ละแถวคือตัวเลือกว่า
         จะส่งเข้า LINE ด้วยไหม — เลือกได้อิสระทั้งฝั่ง<b>สูงเกิน</b>และฝั่ง<b>ต่ำเกิน</b> ไม่ผูกกับระดับความรุนแรง
+        · <b>ปิดสวิตช์ขวาสุด = เงียบทั้งชนิด</b> (ไม่ขึ้นในแท็บแจ้งเตือน และไม่ส่ง LINE)
       </p>
       <div className="flex flex-col gap-1.5">
         {ALERT_CONFIG_CODES.map((c) => {
@@ -228,9 +235,11 @@ export function AlertConfigPanel({ houseId }: { houseId: string }) {
                   aria-checked={cur.notifyLine}
                   aria-label={`ส่งแจ้งเตือน ${c.label} เข้า LINE`}
                   title={
-                    cur.notifyLine
-                      ? 'ชนิดนี้ส่งเข้า LINE — กดเพื่อปิด (ยังขึ้นในแท็บแจ้งเตือนเหมือนเดิม)'
-                      : 'ชนิดนี้ไม่ส่งเข้า LINE — กดเพื่อเปิด'
+                    !cur.enabled
+                      ? 'ชนิดนี้ถูกปิดทั้งชนิด (สวิตช์ขวาสุด) — ไม่ส่ง LINE และไม่ขึ้นในแท็บแจ้งเตือน'
+                      : cur.notifyLine
+                        ? 'ชนิดนี้ส่งเข้า LINE — กดเพื่อปิด (ยังขึ้นในแท็บแจ้งเตือนเหมือนเดิม)'
+                        : 'ชนิดนี้ไม่ส่งเข้า LINE — กดเพื่อเปิด'
                   }
                   className={`rounded-xl2 border px-2 py-1 text-[11px] font-medium transition ${
                     cur.notifyLine
