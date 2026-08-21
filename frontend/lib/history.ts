@@ -230,6 +230,26 @@ export function timeTicks(minMs: number, maxMs: number, target = 5): number[] {
   return out;
 }
 
+// เส้นกริดย่อย: แบ่งแต่ละช่องระหว่าง major tick (จาก valueTicks/timeTicks) เป็น `divisions` ช่องย่อย
+// แล้วยืด step เดียวกันออกไปถึงขอบ [min, max] ด้วย — ใช้ได้ทั้งแกนค่า (valueTicks) และแกนเวลา
+// (timeTicks) เพราะ step ของ major tick คงที่เสมอในทั้งสองแบบ ข้าม tick ที่ซ้ำกับ major เอง
+export function minorTicks(ticks: number[], min: number, max: number, divisions = 5): number[] {
+  if (ticks.length < 2 || divisions < 2 || !(max > min)) return [];
+  const step = ticks[1] - ticks[0];
+  const minorStep = step / divisions;
+  if (!(minorStep > 0)) return [];
+  let start = ticks[0];
+  while (start - minorStep >= min) start -= minorStep;
+  const out: number[] = [];
+  for (let v = start; v <= max + minorStep * 1e-6; v += minorStep) {
+    if (v < min - minorStep * 1e-6) continue;
+    const rounded = Number(v.toFixed(6));
+    const isMajor = ticks.some((t) => Math.abs(t - rounded) < minorStep * 1e-3);
+    if (!isMajor) out.push(rounded);
+  }
+  return out;
+}
+
 const THAI_MONTHS_SHORT = [
   'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
