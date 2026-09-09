@@ -45,16 +45,23 @@ export function RangeControls({
               {r.label}
             </button>
           ))}
-          <input
-            type="date"
-            value={dateStr}
-            max={todayStr}
-            onChange={(e) => onDateChange(e.target.value)}
-            className={`rounded-xl2 border px-2 py-1 text-xs ${
+          {/* ปุ่ม "วัน" — เลือกวันแล้วดูทั้งวันนั้น 00:00–23:59 เสมอ (ดู issue #58) ห่อ label ให้เห็นชัดว่า
+              นี่คือปุ่มเลือกวัน ไม่ใช่แค่ input เฉยๆ (ของเดิมมีแค่ aria-label ที่มองไม่เห็น) */}
+          <label
+            className={`flex items-center gap-1 rounded-xl2 border px-2 py-1 text-xs font-medium ${
               dateActive ? 'border-transparent bg-gray-800 text-white' : 'border-white/70 bg-bg text-gray-600'
             }`}
-            aria-label="เลือกวัน"
-          />
+          >
+            วัน
+            <input
+              type="date"
+              value={dateStr}
+              max={todayStr}
+              onChange={(e) => onDateChange(e.target.value)}
+              className="bg-transparent text-xs focus:outline-none"
+              aria-label="เลือกวัน"
+            />
+          </label>
           {dateActive && (
             <button onClick={() => onDateChange('')} className="text-xs font-medium text-leaf-dark underline">
               ล่าสุด

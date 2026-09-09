@@ -29,6 +29,14 @@ function fmtTime(ms: number, spanMs: number): string {
   return `${ddmm}/${d.getFullYear() % 100}`; // ยาวกว่านั้น (เดือน/ปี) โชว์ปีด้วย
 }
 
+// ป้ายเวลาที่เส้นกริดย่อย (ดู issue #58 — ไม่ต้องนับเส้นว่ากี่ชม.) สั้นกว่า fmtTime มาก เพราะเส้นย่อย
+// ถี่กว่าเส้นหลัก 5 เท่า ใส่ hh:mm เต็มจะรกจนอ่านไม่ออก: span สั้นใส่แค่ "ชม.", span ยาวใส่แค่ "วัน/เดือน"
+function fmtMinorTime(ms: number, spanMs: number): string {
+  const d = new Date(ms);
+  if (spanMs <= 36 * 60 * 60 * 1000) return String(d.getHours()).padStart(2, '0');
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
 export function MultiLineChart({
   series: allSeries,
   domainMin,
@@ -252,6 +260,21 @@ export function MultiLineChart({
               );
             })}
           </svg>
+          {/* ป้ายเวลาเส้นกริดย่อย (ดู issue #58) — เฉพาะจอเดสก์ท็อป (tall) ที่มีที่พอ มือถือแคบเกินจะรก */}
+          {tall &&
+            xMinorTicks.map((t) => {
+              const pct = ((t - domainMin) / span) * 100;
+              if (pct < edgePct || pct > 100 - edgePct) return null;
+              return (
+                <span
+                  key={`ltm-${t}`}
+                  className="pointer-events-none absolute bottom-0 -translate-x-1/2 text-[8px] text-gray-300"
+                  style={{ left: `${pct}%` }}
+                >
+                  {fmtMinorTime(t, span)}
+                </span>
+              );
+            })}
           {/* ป้ายเวลากลางกราฟ (แกน x ถูกยืดตามความกว้าง เลยวางด้วย % + translateX(-50%)) */}
           {xTicks.map((t) => {
             const pct = ((t - domainMin) / span) * 100;

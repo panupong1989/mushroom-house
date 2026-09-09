@@ -6,7 +6,8 @@ import { InOutHistoryCard } from './InOutHistoryCard';
 
 // หน้ากราฟย้อนหลัง 2 ชุด (เลื่อนดูทีละชุด) — ชุดที่ 1 อุณหภูมิในกอง (6 จุด), ชุดที่ 2 ในโรง+นอกโรง
 // แต่ละชุดมีปุ่มเลือกช่วง + date picker อิสระของตัวเอง (ดู issue #34) อ่านจาก RPC sensor_history[_range]
-// (supabase/migrations/005_real_sensors.sql) raw สำหรับช่วงสั้น (<=24h), rollup สำหรับช่วงยาว (week+)
+// (supabase/migrations/005_real_sensors.sql + 016) raw สำหรับ <=month (อยู่ใน raw retention 30 วัน),
+// rollup เฉพาะ year (เกิน raw retention ต้องพึ่ง sensor_readings_hourly — ดู migration 004 ข้อ 5)
 //
 // ปุ่ม "ดูตัวอย่างกราฟ" (ดู issue #38) — สลับทั้ง 2 ชุดกราฟไปแสดงข้อมูลจำลองในหน่วยความจำพร้อมกัน
 // (buildDemoSensorSeries ใน lib/mock.ts) ไม่เขียน/อ่าน Supabase เลยตอนเปิดโหมดนี้ ให้ดูหน้าตากราฟได้
