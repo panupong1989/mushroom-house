@@ -104,15 +104,17 @@ export interface RangeMeta {
   rollup: boolean; // true = อ่าน sensor_readings_hourly (rollup), false = อ่าน raw
 }
 
-// ต้องตรงกับ sensor_history_range ใน supabase/migrations/005_real_sensors.sql (ค่า bucket/rollup
-// ต่อช่วงต้องเหมือนกันทั้งสองฝั่ง ไม่งั้นจำนวนจุดที่ frontend คาดหวัง (mock) กับที่ RPC คืนจะไม่ตรงกัน)
+// ต้องตรงกับ sensor_history_range ใน supabase/migrations/005_real_sensors.sql + 016_week_month_use_raw.sql
+// (ค่า bucket/rollup ต่อช่วงต้องเหมือนกันทั้งสองฝั่ง ไม่งั้นจำนวนจุดที่ frontend คาดหวัง (mock) กับที่
+// RPC คืนจะไม่ตรงกัน) — week/month อยู่ในช่วง raw retention (30 วัน, ดู migration 004) เลยอ่าน raw ตรงๆ
+// ได้ ไม่ต้องพึ่ง rollup/pg_cron (ดู issue #58 — ตอนก่อนแก้ ถ้า rollup ยังว่าง ปุ่มพวกนี้จะคืนค่าว่างเหมือนกันหมด)
 export const RANGE_META: Record<RangeKey, RangeMeta> = {
   '1h': { spanMs: 60 * 60 * 1000, bucketSeconds: 60, rollup: false },
   '4h': { spanMs: 4 * 60 * 60 * 1000, bucketSeconds: 300, rollup: false },
   '12h': { spanMs: 12 * 60 * 60 * 1000, bucketSeconds: 900, rollup: false },
   '24h': { spanMs: 24 * 60 * 60 * 1000, bucketSeconds: 1800, rollup: false },
-  week: { spanMs: 7 * 24 * 60 * 60 * 1000, bucketSeconds: 10800, rollup: true },
-  month: { spanMs: 30 * 24 * 60 * 60 * 1000, bucketSeconds: 43200, rollup: true },
+  week: { spanMs: 7 * 24 * 60 * 60 * 1000, bucketSeconds: 10800, rollup: false },
+  month: { spanMs: 30 * 24 * 60 * 60 * 1000, bucketSeconds: 43200, rollup: false },
   year: { spanMs: 365 * 24 * 60 * 60 * 1000, bucketSeconds: 604800, rollup: true },
 };
 
